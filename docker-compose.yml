@@ -1,0 +1,15 @@
+services:
+  game:
+    build: .
+    image: lanternwood-realms:latest
+    ports:
+      - '8080:8080'
+    environment:
+      WORLD_SEED: '2026'
+      LOG_LEVEL: info
+    volumes:
+      - game-data:/data
+    restart: unless-stopped
+
+volumes:
+  game-data:

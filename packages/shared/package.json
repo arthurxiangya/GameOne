@@ -1,0 +1,11 @@
+{
+  "name": "@lanternwood/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Game rules, deterministic world generation, physics and the network protocol shared by server and client.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

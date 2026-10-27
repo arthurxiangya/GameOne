@@ -1,0 +1,37 @@
+{
+  "name": "lanternwood-realms",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A voxel MMORPG: authoritative Node.js game server, shared game rules, and a three.js browser client.",
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "packages/server",
+    "packages/client"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c yellow,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm run dev -w @lanternwood/server",
+    "dev:client": "npm run dev -w @lanternwood/client",
+    "build": "npm run build -w @lanternwood/client && npm run build -w @lanternwood/server",
+    "start": "npm run start -w @lanternwood/server",
+    "test": "tsx --test \"packages/*/test/**/*.test.ts\"",
+    "typecheck": "tsc -p packages/shared && tsc -p packages/server && tsc -p packages/client",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "check": "npm run typecheck && npm run lint && npm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.14.0",
+    "@types/node": "^22.9.0",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.14.0",
+    "prettier": "^3.3.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.13.0"
+  }
+}

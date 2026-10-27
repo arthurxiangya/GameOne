@@ -1,0 +1,140 @@
+import type { MonsterType } from '../game/monsters';
+import type { NpcAction, NpcId } from '../game/npcs';
+import type { PlayerProgress } from '../game/progress';
+import type { SkillId } from '../game/skills';
+
+/**
+ * Wire protocol v1. Messages are JSON objects discriminated by `t`.
+ * Field names are short because snapshots are sent ten times a second.
+ */
+
+// ---------------------------------------------------------------- client -> server
+
+/** One fixed-step (SIM_DT) frame of movement intent, numbered for reconciliation. */
+export interface InputFrame {
+  readonly seq: number;
+  readonly fwd: number;
+  readonly strafe: number;
+  readonly yaw: number;
+  readonly jump: boolean;
+  readonly swim: boolean;
+}
+
+export type ClientMessage =
+  | { readonly t: 'hello'; readonly v: number; readonly token: string; readonly name: string }
+  | { readonly t: 'input'; readonly frames: readonly InputFrame[] }
+  | { readonly t: 'skill'; readonly skill: SkillId; readonly target: number | null }
+  | { readonly t: 'npc'; readonly npc: NpcId; readonly action: NpcAction }
+  | { readonly t: 'chat'; readonly text: string }
+  | { readonly t: 'respawn' }
+  | { readonly t: 'ping'; readonly at: number };
+
+// ---------------------------------------------------------------- server -> client
+
+export type MonsterAnim = 'idle' | 'move' | 'attack' | 'dead';
+
+export interface PlayerEntityState {
+  readonly k: 'p';
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly yaw: number;
+  readonly hp: number;
+  readonly mhp: number;
+  readonly lv: number;
+  readonly nm: string;
+  readonly look: number;
+  readonly dead: boolean;
+}
+
+export interface MonsterEntityState {
+  readonly k: 'm';
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly yaw: number;
+  readonly hp: number;
+  readonly mhp: number;
+  readonly lv: number;
+  readonly ty: MonsterType;
+  /** Model scale. */
+  readonly sc: number;
+  readonly st: MonsterAnim;
+}
+
+export type EntityState = PlayerEntityState | MonsterEntityState;
+
+/** The receiving player's own authoritative state. */
+export interface SelfState {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly vx: number;
+  readonly vy: number;
+  readonly vz: number;
+  readonly g: boolean;
+  readonly hp: number;
+  readonly mhp: number;
+  readonly mp: number;
+  readonly mmp: number;
+  readonly dead: boolean;
+  /** Remaining cooldown per skill, in seconds. */
+  readonly cd: Readonly<Record<SkillId, number>>;
+}
+
+export type LogClass = 'sys' | 'foe' | 'loot' | 'good';
+
+export type GameEvent =
+  | { readonly e: 'dmg'; readonly id: number; readonly amt: number; readonly crit: boolean }
+  | { readonly e: 'heal'; readonly id: number; readonly amt: number }
+  | { readonly e: 'die'; readonly id: number }
+  | { readonly e: 'lvl'; readonly id: number; readonly lv: number }
+  | { readonly e: 'swing'; readonly id: number }
+  | { readonly e: 'cast'; readonly id: number }
+  | { readonly e: 'bolt'; readonly from: number; readonly to: number; readonly flight: number }
+  | { readonly e: 'ring'; readonly id: number; readonly r: number }
+  | { readonly e: 'slamWarn'; readonly x: number; readonly y: number; readonly z: number; readonly r: number; readonly delay: number }
+  | { readonly e: 'slam'; readonly x: number; readonly y: number; readonly z: number; readonly r: number }
+  | { readonly e: 'xp'; readonly amt: number }
+  | { readonly e: 'target'; readonly id: number | null }
+  | { readonly e: 'log'; readonly text: string; readonly c: LogClass }
+  | { readonly e: 'toast'; readonly text: string }
+  | { readonly e: 'respawned'; readonly fell: boolean };
+
+export type ServerMessage =
+  | {
+      readonly t: 'welcome';
+      readonly v: number;
+      readonly you: number;
+      readonly seed: number;
+      readonly tickRate: number;
+      readonly look: number;
+      readonly progress: PlayerProgress;
+      /** Time of day in [0, 1). */
+      readonly day: number;
+      readonly dayLength: number;
+    }
+  | { readonly t: 'reject'; readonly reason: string }
+  | {
+      readonly t: 'snapshot';
+      readonly tick: number;
+      /** Server simulation time in seconds, for interpolation. */
+      readonly st: number;
+      readonly day: number;
+      /** Highest input sequence number the server has applied for this player. */
+      readonly ack: number;
+      readonly you: SelfState;
+      readonly ents: readonly EntityState[];
+      readonly ev: readonly GameEvent[];
+    }
+  | { readonly t: 'progress'; readonly p: PlayerProgress }
+  | { readonly t: 'chat'; readonly from: string; readonly text: string }
+  | { readonly t: 'system'; readonly text: string }
+  | { readonly t: 'error'; readonly reason: string }
+  | { readonly t: 'pong'; readonly at: number; readonly server: number };
+
+export type ServerMessageType = ServerMessage['t'];
+export type SnapshotMessage = Extract<ServerMessage, { t: 'snapshot' }>;
+export type WelcomeMessage = Extract<ServerMessage, { t: 'welcome' }>;
