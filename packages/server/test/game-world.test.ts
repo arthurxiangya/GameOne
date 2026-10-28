@@ -52,6 +52,17 @@ describe('GameWorld', () => {
     assert.equal(hero.inputQueue.length, 0);
   });
 
+  it('keeps input credit on real time when the simulation has to skip time', () => {
+    const world = makeWorld();
+    const hero = spawnHero(world);
+    world.step(0.05);
+    world.creditRealTime(0.6); // the loop fell behind and dropped 0.6 s
+    world.queueInput(hero.id, Array.from({ length: 16 }, (_, i) => forward(i + 1)));
+    world.step(0.05);
+    assert.equal(hero.lastInputSeq, 16, 'input sent during the skipped time is applied, not dropped');
+    assert.equal(hero.inputQueue.length, 0);
+  });
+
   it('drops stale input after a long stall instead of lagging behind for good', () => {
     const world = makeWorld();
     const hero = spawnHero(world);

@@ -190,6 +190,15 @@ export class GameWorld implements CombatWorld, AiWorld {
     if (player.inputQueue.length > MAX_QUEUED_INPUTS) player.inputQueue.splice(0, player.inputQueue.length - MAX_QUEUED_INPUTS);
   }
 
+  /**
+   * Grants input credit for real time the simulation skipped (the loop fell behind). Clients keep
+   * sending input in real time, so without this their input would be judged stale and dropped.
+   */
+  creditRealTime(seconds: number): void {
+    const frames = seconds / SIM_DT;
+    for (const player of this.playersById.values()) player.inputCredit = Math.min(MAX_INPUT_CREDIT, player.inputCredit + frames);
+  }
+
   execute(playerId: number, command: PlayerCommand): Result {
     const player = this.playersById.get(playerId);
     if (!player) return fail('You are not in the world.');

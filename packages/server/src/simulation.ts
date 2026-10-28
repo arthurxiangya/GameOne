@@ -64,6 +64,7 @@ export function createSimulation({ config, repository, logger, time, hashToken, 
     },
     time,
     logger.child({ component: 'loop' }),
+    (seconds) => world.creditRealTime(seconds),
   );
   return { world, sessions, loop };
 }
