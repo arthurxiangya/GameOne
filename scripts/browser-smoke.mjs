@@ -56,7 +56,7 @@ async function openPlayer(browser, url, name) {
   await page.fill('#nameInput', name);
   await page.click('#enterBtn');
   await page.waitForFunction(
-    () => document.body.classList.contains('playing') && window.lanternwood?.debugState.hp != null,
+    () => document.body.classList.contains('playing') && typeof window.lanternwood?.debugState.hp === 'number',
     null,
     { timeout: 60_000 },
   );
