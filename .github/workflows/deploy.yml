@@ -1,0 +1,67 @@
+name: Deploy
+
+# After CI passes on main, deploys that exact commit to Render, waits until the live server
+# reports it on /healthz, then measures it with bots and two real browsers (the Live probe).
+#
+# One-time setup: in Render open the service, Settings > Deploy Hook, and copy the URL. In GitHub
+# open Settings > Secrets and variables > Actions and save it as RENDER_DEPLOY_HOOK_URL. Without
+# that secret this workflow only leaves a note and succeeds.
+#
+# The hook deploys a named commit directly. It does not depend on Render's own auto-deploy,
+# which never runs for a service created from a public repository URL, and it does not wait for
+# this commit's checks, so it cannot block on itself.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time. A newer commit waits for the current deploy and its measurement.
+concurrency:
+  group: deploy-render
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    outputs:
+      deployed: ${{ steps.hook.outputs.deployed }}
+      commit: ${{ steps.hook.outputs.commit }}
+    steps:
+      - name: Ask Render to deploy this commit
+        id: hook
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::notice title=Not deployed::No RENDER_DEPLOY_HOOK_URL secret, so ${SHA:0:12} was not deployed. Deploy it in Render (Manual Deploy > Deploy latest commit), or add the secret (see README) to deploy every green push to main."
+            echo "deployed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          case "$HOOK" in *\?*) url="$HOOK&ref=$SHA" ;; *) url="$HOOK?ref=$SHA" ;; esac
+          code="$(curl -sS -m 30 -o response.txt -w '%{http_code}' -X POST "$url" || true)"
+          case "$code" in
+            200|201|202) ;;
+            *)
+              echo "::error title=Render did not start the deploy::HTTP ${code:-000}. $(head -c 300 response.txt 2>/dev/null) (404: commit not in the linked repo; 409: service suspended; 000: no answer)"
+              exit 1
+              ;;
+          esac
+          echo "::notice title=Deploying ${SHA:0:12}::Render accepted the deploy (HTTP $code)."
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+          echo "commit=${SHA:0:12}" >> "$GITHUB_OUTPUT"
+
+  measure:
+    needs: deploy
+    if: needs.deploy.outputs.deployed == 'true'
+    uses: ./.github/workflows/live-probe.yml
+    with:
+      expect: '"commit":"${{ needs.deploy.outputs.commit }}"'
+      required: true
