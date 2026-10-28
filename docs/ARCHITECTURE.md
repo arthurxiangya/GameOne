@@ -35,6 +35,7 @@ One process serves the static client, the WebSocket endpoint and a health probe.
 ```mermaid
 flowchart TD
   client["@lanternwood/client<br/>render · netcode · UI"] --> shared
+  client -. "single-player only:<br/>@lanternwood/server/embedded" .-> server
   server["@lanternwood/server<br/>simulation · sessions · I/O"] --> shared
   shared["@lanternwood/shared<br/>world gen · physics · rules · protocol"]
 ```
@@ -43,7 +44,9 @@ flowchart TD
 | --- | --- | --- | --- |
 | `shared` | nothing | Node and browser | Seeded noise and RNG, voxel world and generator, chunk mesher, player physics, stats/skills/monsters/quests/economy data, protocol types, validation and sanitisers |
 | `server` | `shared`, `ws` | Node | The authoritative game server |
-| `client` | `shared`, `three` | Browser | Rendering, input, prediction, interpolation, HUD |
+| `client` | `shared`, `three`, `server/embedded` | Browser | Rendering, input, prediction, interpolation, HUD, transports |
+
+The client may import only the server's `embedded` entry point (enforced by the server's package `exports`), and only for single-player mode (section 7).
 
 `shared` exports TypeScript source. tsx, Vite and esbuild compile it as part of whichever side imports it, so there is no separate build step and no risk of a stale build.
 
@@ -151,7 +154,27 @@ Skills, NPC actions, chat and respawn are discrete commands. The client shows co
 
 The world is never sent. The server sends only its seed, and the client runs the same `generateWorld(seed)`, which takes about 0.2 s. Chunks are meshed a few per frame with face culling and per-vertex ambient occlusion.
 
-## 7. Security
+## 7. Play modes: online and single-player
+
+The client reaches a server through one `Transport` interface. Everything above it is identical in both modes: prediction, reconciliation, interpolation, the HUD and the protocol messages, which stay JSON text in both.
+
+```mermaid
+flowchart LR
+  subgraph Online
+    C1[GameClient] --> WT[WebSocketTransport] -- "ws://…/ws" --> GW[WebSocketGateway] --> S1["createSimulation()"]
+  end
+  subgraph "Single-player (one browser tab)"
+    C2[GameClient] --> LT[LoopbackTransport] -- "in-page link" --> E["createEmbeddedServer()"] --> S2["createSimulation()"]
+    E --> LS[(localStorage)]
+  end
+```
+
+- `createSimulation()` (`server/src/simulation.ts`) builds the world, the session service and the fixed-step loop. It has no Node APIs, and ESLint keeps it that way.
+- The **online server** (`app.ts`) adds HTTP, the WebSocket gateway, JSON-file saves and autosave.
+- The **embedded server** (`embedded.ts`) adds a loopback link, a browser storage repository and a single-player limit. Because it is the same authoritative code, single-player mode also checks every rule that matters online.
+- `resolvePlayMode` picks the mode: `?offline` forces single-player, `?server=` forces online, and otherwise the build decides (`npm run build:preview` makes the single-player bundle).
+
+## 8. Security
 
 | Threat | Mitigation |
 | --- | --- |
@@ -165,20 +188,22 @@ The world is never sent. The server sends only its seed, and the client runs the
 | Cross-site socket use | Optional `ALLOWED_ORIGINS` allow-list on the WebSocket upgrade. |
 | Duplicate sessions | Joining with a hero that is already online signs out the older window (code 4409) after saving it. |
 
-## 8. Persistence
+## 9. Persistence
 
-`PlayerRepository` is a domain port with two adapters:
+`PlayerRepository` is a domain port with three adapters:
 
 - **`JsonFilePlayerRepository`** writes one file per hero. Each write goes to a temp file and is renamed into place, so a crash cannot corrupt a save. Writes for the same account are serialised, and a corrupt or out-of-range file is refused instead of overwritten.
 - **`InMemoryPlayerRepository`** is used by tests.
+- **`LocalStoragePlayerRepository`** (client) keeps single-player heroes in the browser, falling back to memory when storage is blocked.
 
 Heroes are saved when they leave, every `AUTOSAVE_SECONDS`, and on graceful shutdown (SIGINT or SIGTERM, with a 10-second hard timeout).
 
-## 9. Client structure
+## 10. Client structure
 
 ```
-src/app/      GameClient (state machine + frame loop), identity, server URL
-src/net/      Connection: typed WebSocket wrapper
+src/app/      GameClient (state machine + frame loop), identity, play mode, server URL
+src/net/      Transport interface; WebSocketTransport (online), LoopbackTransport (single-player)
+src/offline/  Browser adapters for the embedded server: localStorage saves, clock
 src/state/    LocalPlayer (prediction), EntityStore + SnapshotBuffer (interpolation), ClockSync
 src/input/    Keyboard, touch joystick, pointer camera (drag, pinch, tap-to-target)
 src/render/   SceneContext, TerrainRenderer, SkySystem, EntityViews + models, Effects, CameraRig
@@ -187,12 +212,12 @@ src/ui/       HUD, minimap, nameplates and floating text, dialogs, chat, notices
 
 State and net code have no three.js or DOM dependencies, so they are unit-tested in Node. `GameClient` is the only place where network, input, state and views meet.
 
-## 10. Observability
+## 11. Observability
 
 - Logs are one JSON object per line (`time`, `level`, `message`, `component`, plus fields), ready for any log shipper.
 - `GET /healthz` reports players, connections, the current tick and loop statistics (average and maximum step time, lag resets, step errors). Use it for container health checks and alerting.
 
-## 11. Scaling path
+## 12. Scaling path
 
 The current design targets one process with up to a few hundred players. The ports make the next steps local changes:
 
@@ -201,11 +226,17 @@ The current design targets one process with up to a few hundred players. The por
 3. **Sharding by zone.** Run one `GameWorld` per zone or realm instance behind a gateway that hands players over at zone borders. `GameWorld` already owns everything about one simulation and nothing about transport.
 4. **Real accounts.** Replace guest tokens with an auth service that issues signed tokens. Only `hashToken` and the hello handshake change.
 
-## 12. Testing strategy
+## 13. Testing strategy
 
 | Level | Where | Examples |
 | --- | --- | --- |
 | Unit | `packages/*/test` | Physics collisions, protocol validation, token bucket, spatial hash, snapshot interpolation |
 | Domain / application | `server/test/combat`, `game-world`, `session-service` | Quest chain end to end, monster leashing, speed-hack guard, duplicate login, full server |
 | Integration | `server/test/infrastructure` | Atomic JSON saves, config validation |
-| End to end | `server/test/e2e` | Real HTTP and WebSocket server; two clients join, see each other move, and chat; path traversal blocked |
+| End to end | `server/test/e2e`, `client/test/offline` | Real HTTP and WebSocket server; two clients join, see each other move, and chat; path traversal blocked; single-player through the in-page server |
+| Browser (CI) | `scripts/browser-smoke.mjs` | Headless Chromium with WebGL: two players in the online build see each other move and chat; the preview bundle renders and plays |
+| Container (CI) | `.github/workflows/ci.yml` | Docker image builds, starts, answers `/healthz` and serves the client |
+
+## 14. Deployment
+
+`render.yaml` describes the online server as a Render web service built from the Dockerfile, with `/healthz` as its health check and redeploys after CI passes on `main`. The Dockerfile works on any container host; set `PORT`, and mount a persistent volume at `/data` to keep heroes across restarts.

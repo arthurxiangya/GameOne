@@ -1,0 +1,24 @@
+# Render Blueprint for the online game server.
+# One-click deploy: https://render.com/deploy?repo=https://github.com/arthurxiangya/GameOne
+#
+# The free plan sleeps after 15 idle minutes (about a minute to wake) and its disk is
+# temporary, so heroes reset when the service restarts. Move to a paid plan with a
+# persistent disk mounted at /data, or a database adapter, to keep heroes for good.
+services:
+  - type: web
+    name: lanternwood-realms
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    # Redeploy after every push to main once CI passes.
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PORT
+        value: '8080'
+      - key: WORLD_SEED
+        value: '2026'
+      - key: TOKEN_SALT
+        generateValue: true

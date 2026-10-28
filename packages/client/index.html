@@ -22,14 +22,16 @@
           <text x="2" y="38" font-size="36" textLength="306" lengthAdjust="spacingAndGlyphs">LANTERNWOOD</text>
           <text class="sub" x="2" y="82" font-size="30">REALMS</text>
         </svg>
-        <p class="tag">An online voxel world. Take quests in Emberhold, hunt across five lands with other heroes, and climb Frostspine to face the Warden of the Frost Heart.</p>
+        <p class="tag online-only">An online voxel world. Take quests in Emberhold, hunt across five lands with other heroes, and climb Frostspine to face the Warden of the Frost Heart.</p>
+        <p class="tag offline-only">Take quests in Emberhold, hunt across five lands, and climb Frostspine to face the Warden of the Frost Heart.</p>
+        <p class="fine offline-only">Single-player preview: the full game server runs inside this page. Your hero is saved in this browser.</p>
         <div class="field">
           <label for="nameInput">Hero name</label>
           <input id="nameInput" name="name" type="text" maxlength="14" autocomplete="nickname" spellcheck="false" required />
         </div>
         <button id="enterBtn" class="btn primary" type="submit" disabled>Raising the realm…</button>
         <p class="fine" id="startStatus" role="status"></p>
-        <p class="fine no-touch">WASD to move · drag to look · 1–4 skills · Q tonic · E talk · Enter to chat</p>
+        <p class="fine no-touch">WASD to move · drag to look · 1–4 skills · Q tonic · E talk<span class="online-only"> · Enter to chat</span></p>
         <p class="fine touch-only">Joystick to move · drag to look · tap a monster to target it</p>
       </form>
     </section>
@@ -70,7 +72,7 @@
     </section>
 
     <div class="hud game topbtns">
-      <button class="btn panel iconbtn" id="chatBtn" type="button" aria-label="Chat">
+      <button class="btn panel iconbtn online-only" id="chatBtn" type="button" aria-label="Chat">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
       </button>
       <button class="btn panel iconbtn" id="menuBtn" type="button" aria-label="Menu">
@@ -155,7 +157,8 @@
         <li>Talk to <b>Elder Maren</b> (gold <b>!</b> above her) for quests.</li>
         <li>Visit <b>Smith Oda</b> to buy tonics and sharpen your blade.</li>
         <li>Tap a monster to target it, then use your skills. Strike repeats while held.</li>
-        <li>Other heroes you see are real players. Say hello in chat.</li>
+        <li class="online-only">Other heroes you see are real players. Say hello in chat.</li>
+        <li class="offline-only">This is the single-player preview. Your hero is saved in this browser.</li>
       </ul>
       <div class="acts">
         <button class="btn primary" id="resumeBtn" type="button">Resume</button>

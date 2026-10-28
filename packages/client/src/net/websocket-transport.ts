@@ -1,18 +1,13 @@
-import { decodeServerMessage, encodeMessage, type ClientMessage, type ServerMessage } from '@lanternwood/shared';
+import { decodeServerMessage, encodeMessage, type ClientMessage } from '@lanternwood/shared';
+import type { Transport, TransportHandlers } from './transport';
 
-export interface ConnectionHandlers {
-  open(): void;
-  message(msg: ServerMessage): void;
-  close(code: number, reason: string): void;
-}
-
-/** Thin, typed wrapper around the browser WebSocket. Reconnect policy lives in the app layer. */
-export class Connection {
+/** Online play: a typed wrapper around the browser WebSocket. Reconnect policy lives in the app layer. */
+export class WebSocketTransport implements Transport {
   private socket: WebSocket | null = null;
 
   constructor(
     private readonly url: string,
-    private readonly handlers: ConnectionHandlers,
+    private readonly handlers: TransportHandlers,
   ) {}
 
   get isOpen(): boolean {

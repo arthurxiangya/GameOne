@@ -78,6 +78,8 @@ body {
 body:not(.playing) .game { display: none !important; }
 body.playing .start { display: none; }
 body:not(.touch) .touch-only { display: none !important; }
+body.offline .online-only { display: none !important; }
+body:not(.offline) .offline-only { display: none !important; }
 body.touch .no-touch { display: none !important; }
 
 /* title card */

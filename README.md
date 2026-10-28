@@ -7,6 +7,15 @@ A voxel MMORPG for the browser. An authoritative Node.js game server simulates a
 - **RPG systems.** Four skills, tonics, critical hits, experience and levels up to 20, gold, weapon upgrades and a six-quest chain.
 - **Persistent heroes.** Progress is saved on the server and restored when you return in the same browser.
 - **Works on phones.** A touch joystick and skill wheel, tap-to-target, and a smaller draw distance on small screens.
+- **Single-player preview.** The same game server can run inside the page, so the game also plays with no server at all.
+
+## Deploy the online server
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/arthurxiangya/GameOne)
+
+The button creates a free Render web service from [render.yaml](render.yaml), building the Dockerfile. When the deploy finishes, open the service's `onrender.com` address on any device; everyone who opens it plays in the same realm. After that, every push to `main` redeploys once CI passes.
+
+On the free plan the service sleeps after 15 idle minutes (the first visit then takes about a minute to wake it), and its disk is temporary, so heroes reset when it restarts. Use a paid plan with a persistent disk at `/data`, or a database adapter, to keep heroes permanently.
 
 ## Quick start
 
@@ -34,6 +43,14 @@ docker compose up --build
 
 Hero saves live in the `game-data` volume (`/data` in the container).
 
+### Single-player preview
+
+```bash
+npm run build:preview   # packages/client/dist-preview: index.html, standalone.html, game.js
+```
+
+The preview runs the authoritative server inside the page and saves the hero in the browser, so it can be hosted on any static file host. three.js loads from the jsDelivr CDN. Any build also switches to single-player with `?offline` in the URL.
+
 ## Scripts
 
 | Command | What it does |
@@ -45,6 +62,8 @@ Hero saves live in the `game-data` volume (`/data` in the container).
 | `npm run typecheck` | Strict TypeScript checks for all three packages |
 | `npm run lint` | ESLint, including the architecture import rules |
 | `npm run check` | Typecheck, lint and test, as CI does |
+| `npm run build:preview` | Single-player preview bundle (server runs in the page) |
+| `npm run test:browser` | Real-browser checks with Playwright: `online <url>` or `preview <dir>` |
 
 ## Configuration
 
@@ -97,11 +116,13 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing code. It expla
 
 ## Testing
 
-`npm test` runs about 75 tests:
+`npm test` runs about 80 tests:
 
 - **Shared:** deterministic world generation, collision physics, protocol validation, game rules and chunk meshing.
 - **Server:** combat, quests, monster AI, the speed-hack guard, session handling (rate limits, duplicate logins, full server), persistence, and a real WebSocket end-to-end test with two players.
-- **Client:** prediction and reconciliation converge with the server, plus snapshot interpolation and clock sync.
+- **Client:** prediction and reconciliation converge with the server, snapshot interpolation, clock sync, and single-player play through the in-page server.
+
+CI also runs real-browser checks in headless Chromium with WebGL: two players join the online build, see each other move and chat, and the single-player preview loads, renders and plays. It then builds the Docker image and checks that the container serves the game.
 
 ## License
 

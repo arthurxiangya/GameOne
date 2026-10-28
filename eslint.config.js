@@ -38,6 +38,30 @@ export default tseslint.config(
     },
   },
   {
+    // These two files are the server's browser-safe entry points (single-player runs them in a tab).
+    files: ['packages/server/src/simulation.ts', 'packages/server/src/embedded.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            { group: ['node:*', 'ws'], message: 'simulation.ts and embedded.ts must run in a browser: no Node APIs.' },
+            {
+              group: ['**/infrastructure/http/**', '**/infrastructure/network/**', '**/infrastructure/logging/**', '**/infrastructure/time/**', '**/infrastructure/security/**'],
+              message: 'Only Node-free adapters (scheduling, in-memory persistence) may be used here.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly', fetch: 'readonly', setTimeout: 'readonly', URL: 'readonly', window: 'readonly', document: 'readonly' },
+    },
+  },
+  {
     files: ['packages/shared/src/**/*.ts'],
     rules: {
       'no-restricted-imports': [

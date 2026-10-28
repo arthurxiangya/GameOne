@@ -19,7 +19,7 @@ const MAX_CATCH_UP = 5;
  */
 export class FixedStepLoop {
   private readonly dt: number;
-  private timer: NodeJS.Timeout | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
   private last = 0;
   private accumulator = 0;
   private ticks = 0;
