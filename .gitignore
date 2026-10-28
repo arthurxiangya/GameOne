@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-preview/
+screenshots/
 coverage/
 data/
 *.log

@@ -51,4 +51,10 @@ export class SceneContext {
   render(): void {
     this.renderer.render(this.scene, this.camera);
   }
+
+  /** What the last frame drew; a blank screen shows up here as zero triangles. */
+  get renderStats(): { calls: number; triangles: number } {
+    const info = this.renderer.info.render;
+    return { calls: info.calls, triangles: info.triangles };
+  }
 }

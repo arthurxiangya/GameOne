@@ -4,6 +4,9 @@
   "private": true,
   "description": "Authoritative game server: fixed-tick simulation, sessions, persistence, WebSocket transport.",
   "type": "module",
+  "exports": {
+    "./embedded": "./src/embedded.ts"
+  },
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "build": "esbuild src/main.ts --bundle --platform=node --target=node20 --format=esm --external:ws --sourcemap --outfile=dist/main.js",

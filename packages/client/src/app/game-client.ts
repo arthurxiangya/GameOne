@@ -26,7 +26,7 @@ import {
 import { KeyboardInput } from '../input/keyboard';
 import { Joystick } from '../input/joystick';
 import { PointerCamera } from '../input/pointer-camera';
-import { Connection } from '../net/connection';
+import type { Transport, TransportFactory } from '../net/transport';
 import { CameraRig } from '../render/camera-rig';
 import { Effects } from '../render/effects';
 import { EntityViews } from '../render/entity-views';
@@ -48,7 +48,9 @@ import { TitleScreen } from '../ui/title-screen';
 import { loadIdentity, rememberName, type Identity } from './identity';
 
 export interface GameClientOptions {
-  readonly serverUrl: string;
+  readonly createTransport: TransportFactory;
+  /** Single-player preview: the server runs inside this page. */
+  readonly offline: boolean;
   readonly lowPower: boolean;
   readonly reduceMotion: boolean;
 }
@@ -87,7 +89,7 @@ export class GameClient {
   private readonly title: TitleScreen;
   private readonly keyboard = new KeyboardInput();
   private readonly joystick: Joystick;
-  private readonly connection: Connection;
+  private readonly connection: Transport;
   private readonly entities = new EntityStore();
   private readonly clock = new ClockSync();
   private readonly identity: Identity;
@@ -139,7 +141,8 @@ export class GameClient {
     this.minimap = new Minimap(byId<HTMLCanvasElement>('minimap'));
     this.title = new TitleScreen(this.identity.name);
     this.joystick = new Joystick(byId('stick'), byId('knob'));
-    this.connection = new Connection(options.serverUrl, {
+    document.body.classList.toggle('offline', options.offline);
+    this.connection = options.createTransport({
       open: () => this.onOpen(),
       message: (msg) => this.onMessage(msg),
       close: (code, reason) => this.onClose(code, reason),
@@ -189,7 +192,7 @@ export class GameClient {
         case 'q': this.useSkill('tonic'); break;
         case 'e': if (this.nearNpc) this.openNpc(this.nearNpc); break;
         case 'tab': this.cycleTarget(); break;
-        case 'enter': this.keyboard.clear(); this.chat.open(); break;
+        case 'enter': if (!this.options.offline) { this.keyboard.clear(); this.chat.open(); } break;
         case 'escape': this.escape(); break;
       }
     });
@@ -491,7 +494,12 @@ export class GameClient {
 
   private readonly frame = (ts: number): void => {
     requestAnimationFrame(this.frame);
-    const dt = Math.min(0.05, Math.max(0, (ts - this.lastFrame) / 1000));
+    const raw = Math.max(0, (ts - this.lastFrame) / 1000);
+    // Game time follows the real clock even at low frame rates (up to a quarter second per
+    // frame), so a slow device plays at normal speed instead of in slow motion. Animations
+    // use a tighter cap so one long hitch never makes models jump.
+    const elapsed = Math.min(MAX_STEPS_PER_FRAME * SIM_DT, raw);
+    const dt = Math.min(0.05, raw);
     this.lastFrame = ts;
     this.now = ts / 1000;
     this.frameCount++;
@@ -505,7 +513,7 @@ export class GameClient {
       this.title.setReady();
     }
 
-    if (this.phase === 'playing') this.updatePlaying(dt);
+    if (this.phase === 'playing') this.updatePlaying(dt, elapsed);
     else {
       this.cameraRig.orbit(dt);
       this.timeOfDay = (this.timeOfDay + dt / this.dayLength) % 1;
@@ -519,17 +527,18 @@ export class GameClient {
     this.ctx.render();
   };
 
-  private updatePlaying(dt: number): void {
+  /** `dt` drives animation; `elapsed` is real time for prediction, cooldowns and the clock. */
+  private updatePlaying(dt: number, elapsed: number): void {
     const local = this.local;
     const world = this.generated?.world;
     if (!local || !world) return;
-    this.timeOfDay = (this.timeOfDay + dt / this.dayLength) % 1;
-    for (const id of SKILL_IDS) this.cooldowns[id] = Math.max(0, this.cooldowns[id] - dt);
+    this.timeOfDay = (this.timeOfDay + elapsed / this.dayLength) % 1;
+    for (const id of SKILL_IDS) this.cooldowns[id] = Math.max(0, this.cooldowns[id] - elapsed);
 
     // Fixed-step prediction: every step is sent to the server with a sequence number.
     if (this.haveSnapshot) {
       const intent = this.readIntent();
-      this.accumulator += dt;
+      this.accumulator += elapsed;
       const frames: InputFrame[] = [];
       while (this.accumulator >= SIM_DT && frames.length < MAX_STEPS_PER_FRAME) {
         frames.push(local.step({ ...intent, jump: this.jumpQueued && !this.self?.dead }));
@@ -714,13 +723,33 @@ export class GameClient {
     return this.views.positionOf(id, 0);
   }
 
-  /** Exposed for debugging in the browser console. */
-  get debugState(): { phase: Phase; entities: number; pending: number; target: EntityState | null } {
+  /** Exposed for debugging in the browser console and for automated browser checks. */
+  get debugState(): {
+    phase: Phase;
+    terrainReady: boolean;
+    entities: number;
+    pending: number;
+    hp: number | null;
+    position: { x: number; z: number };
+    players: { name: string; x: number; z: number }[];
+    target: EntityState | null;
+    drawCalls: number;
+    triangles: number;
+  } {
+    const stats = this.ctx.renderStats;
+    const players: { name: string; x: number; z: number }[] = [];
+    for (const e of this.entities.all()) if (e.state.k === 'p') players.push({ name: e.state.nm, x: e.pose.x, z: e.pose.z });
     return {
       phase: this.phase,
+      terrainReady: this.terrain.ready,
       entities: [...this.entities.all()].length,
       pending: this.local?.unacknowledged ?? 0,
+      hp: this.self?.hp ?? null,
+      position: { x: this.renderPos.x, z: this.renderPos.z },
+      players,
       target: this.targetId !== null ? this.entities.get(this.targetId)?.state ?? null : null,
+      drawCalls: stats.calls,
+      triangles: stats.triangles,
     };
   }
 }

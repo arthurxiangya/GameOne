@@ -1,15 +1,15 @@
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { MAX_CLIENT_MESSAGE_BYTES, Mulberry32, generateWorld } from '@lanternwood/shared';
-import { GameWorld } from './application/game-world';
+import { MAX_CLIENT_MESSAGE_BYTES } from '@lanternwood/shared';
+import type { GameWorld } from './application/game-world';
 import type { Logger, SystemTime } from './application/ports';
-import { SessionService } from './application/session-service';
+import type { SessionService } from './application/session-service';
 import type { ServerConfig } from './config';
 import type { PlayerRepository } from './domain/ports';
 import { createHttpServer } from './infrastructure/http/http-server';
 import { WebSocketGateway } from './infrastructure/network/websocket-gateway';
-import { FixedStepLoop } from './infrastructure/scheduling/fixed-step-loop';
 import { createTokenHasher } from './infrastructure/security/token-hasher';
+import { createSimulation } from './simulation';
 
 export interface GameServer {
   readonly world: GameWorld;
@@ -28,39 +28,18 @@ export interface GameServerDependencies {
 }
 
 /**
- * Composition root: wires the simulation, sessions, transport and HTTP together.
- * Kept separate from main.ts so integration tests can boot a real server in-process.
+ * Composition root for the online server: the shared simulation plus HTTP, the WebSocket
+ * gateway and autosave. Kept separate from main.ts so integration tests can boot a real
+ * server in-process.
  */
 export function createGameServer({ config, logger, time, repository }: GameServerDependencies): GameServer {
-  const generated = generateWorld(config.worldSeed);
-  const world = new GameWorld({
-    generated,
-    rng: new Mulberry32((config.worldSeed ^ Date.now()) | 0),
-    dayLengthSeconds: config.dayLengthSeconds,
-  });
-  const sessions = new SessionService({
-    world,
+  const { world, sessions, loop } = createSimulation({
+    config,
     repository,
-    logger: logger.child({ component: 'sessions' }),
+    logger,
     time,
     hashToken: createTokenHasher(config.tokenSalt),
-    options: {
-      maxPlayers: config.maxPlayers,
-      interestRadius: config.interestRadius,
-      snapshotEveryTicks: config.snapshotEveryTicks,
-      tickRate: config.tickRate,
-      dayLengthSeconds: config.dayLengthSeconds,
-    },
   });
-  const loop = new FixedStepLoop(
-    config.tickRate,
-    (dt) => {
-      world.step(dt);
-      sessions.afterTick();
-    },
-    time,
-    logger.child({ component: 'loop' }),
-  );
   const http: Server = createHttpServer({
     clientDist: config.clientDist,
     logger: logger.child({ component: 'http' }),
