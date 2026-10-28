@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { WebSocket, type RawData } from 'ws';
-import { PROTOCOL_VERSION, decodeServerMessage, type ClientMessage, type ServerMessage } from '@lanternwood/shared';
+import { PROTOCOL_VERSION, applyEntityUpdates, decodeServerMessage, type ClientMessage, type EntityState, type ServerMessage } from '@lanternwood/shared';
 import { createGameServer, type GameServer } from '../src/app';
 import { nullLogger } from '../src/application/ports';
 import { loadConfig } from '../src/config';
@@ -14,6 +14,8 @@ import { token } from './support';
 
 interface TestClient {
   readonly messages: ServerMessage[];
+  /** Entities in view, with every snapshot's deltas applied. */
+  readonly entities: Map<number, EntityState>;
   send(msg: ClientMessage): void;
   waitFor<T extends ServerMessage>(predicate: (m: ServerMessage) => m is T, timeoutMs?: number): Promise<T>;
   close(): void;
@@ -23,9 +25,11 @@ function connect(port: number): Promise<TestClient> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
     const messages: ServerMessage[] = [];
+    const entities = new Map<number, EntityState>();
     const waiters: (() => void)[] = [];
     socket.on('message', (data: RawData) => {
       const msg = decodeServerMessage(data.toString());
+      if (msg?.t === 'snapshot') applyEntityUpdates(entities, msg.ents, msg.gone);
       if (msg) messages.push(msg);
       for (const w of [...waiters]) w();
     });
@@ -33,6 +37,7 @@ function connect(port: number): Promise<TestClient> {
     socket.on('open', () =>
       resolve({
         messages,
+        entities,
         send: (msg) => socket.send(JSON.stringify(msg)),
         close: () => socket.close(),
         waitFor: (predicate, timeoutMs = 4000) =>
@@ -101,11 +106,12 @@ describe('game server end to end', () => {
       const frames = Array.from({ length: 8 }, (_, i) => ({ seq: i + 1, fwd: 1, strafe: 0, yaw: 0, jump: false, swim: false }));
       a.send({ t: 'input', frames });
 
-      const seen = await b.waitFor(
+      await b.waitFor(
         (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
-          m.t === 'snapshot' && m.ents.some((e) => e.k === 'p' && e.id === welcomeA.you && e.z < 4.6),
+          m.t === 'snapshot' && (b.entities.get(welcomeA.you)?.z ?? Infinity) < 4.6,
       );
-      assert.ok(seen.ents.some((e) => e.k === 'p' && e.nm === 'Aria'));
+      const aria = b.entities.get(welcomeA.you);
+      assert.equal(aria?.k === 'p' ? aria.nm : null, 'Aria');
 
       const acked = await a.waitFor((m): m is Extract<ServerMessage, { t: 'snapshot' }> => m.t === 'snapshot' && m.ack === 8);
       assert.ok(acked.you.z < 5);

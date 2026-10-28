@@ -41,8 +41,19 @@ export interface GameWorldOptions {
   readonly startTimeOfDay?: number;
 }
 
-/** Frames a player may bank while lagging; more than this is dropped, never fast-forwarded. */
-const MAX_INPUT_CREDIT = 6;
+/**
+ * Movement is paid for with input credit: one frame per tick of real time. Credit banks up to
+ * one second, so input delayed by a network hiccup is caught up as soon as it arrives instead
+ * of queueing behind newer input, but nobody can move faster than real time over any window.
+ */
+export const MAX_INPUT_CREDIT = 20;
+/** New players start with a little credit, so ordinary jitter never builds a queue. */
+export const INITIAL_INPUT_CREDIT = 4;
+/**
+ * Input still waiting after credit runs out is stale. Beyond this many frames the oldest are
+ * dropped, so a long stall costs one small correction instead of lasting delay for everyone.
+ */
+export const MAX_INPUT_BACKLOG = 4;
 const MAX_QUEUED_INPUTS = 40;
 /** Monsters further than this from every player sleep. */
 const SIMULATION_RADIUS = 90;
@@ -151,6 +162,7 @@ export class GameWorld implements CombatWorld, AiWorld {
   spawnPlayer(accountId: string, look: number, progress: PlayerProgress): Player {
     const player = new Player(this.nextEntityId++, accountId, look, progress, this.spawnPoint);
     player.teleport(this.spawnPoint);
+    player.inputCredit = INITIAL_INPUT_CREDIT;
     this.playersById.set(player.id, player);
     this.playerGrid.rebuild(this.playersById.values());
     return player;
@@ -232,6 +244,12 @@ export class GameWorld implements CombatWorld, AiWorld {
       if (frame.seq <= player.lastInputSeq) continue;
       player.lastInputSeq = frame.seq;
       this.applyInput(player, frame);
+    }
+    const stale = player.inputQueue.length - MAX_INPUT_BACKLOG;
+    if (stale > 0) {
+      // Acknowledge the skipped frames so the client reconciles straight to the server state.
+      const skipped = player.inputQueue.splice(0, stale);
+      player.lastInputSeq = Math.max(player.lastInputSeq, skipped[skipped.length - 1]!.seq);
     }
 
     this.regenerate(player, dt);

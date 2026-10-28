@@ -38,6 +38,7 @@ export class Hud {
   private readonly clock = byId('clock');
   private readonly phase = byId('phase');
   private readonly ping = byId('ping');
+  private readonly fps = byId('fps');
   private readonly sun = svgById('clkSun');
   private readonly moon = svgById('clkMoon');
   private readonly hurt = byId('hurtfx');
@@ -115,6 +116,10 @@ export class Hud {
 
   setPing(ms: number | null): void {
     setText(this.ping, ms === null ? '— ms' : `${Math.round(ms)} ms`);
+  }
+
+  setFps(fps: number): void {
+    setText(this.fps, `${Math.round(fps)} fps`);
   }
 
   setHurt(amount: number): void {

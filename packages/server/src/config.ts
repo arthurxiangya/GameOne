@@ -56,7 +56,7 @@ export function loadConfig(env: Env, cwd: string = process.cwd()): ServerConfig 
     clientDist: env.CLIENT_DIST ? resolve(cwd, env.CLIENT_DIST) : DEFAULT_CLIENT_DIST,
     worldSeed: int('WORLD_SEED', 2026, 0, 2 ** 31 - 1),
     tickRate: int('TICK_RATE', 20, 10, 60),
-    snapshotEveryTicks: int('SNAPSHOT_EVERY_TICKS', 2, 1, 10),
+    snapshotEveryTicks: int('SNAPSHOT_EVERY_TICKS', 1, 1, 10),
     maxPlayers: int('MAX_PLAYERS', 64, 1, 1000),
     interestRadius: int('INTEREST_RADIUS', 80, 20, 200),
     autosaveSeconds: int('AUTOSAVE_SECONDS', 30, 5, 3600),

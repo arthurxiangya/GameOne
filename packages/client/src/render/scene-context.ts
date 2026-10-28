@@ -26,6 +26,11 @@ export class SceneContext {
     return this.renderer.domElement;
   }
 
+  setPixelRatio(ratio: number): void {
+    this.renderer.setPixelRatio(ratio);
+    this.resize();
+  }
+
   setDrawDistance(near: number, far: number): void {
     this.fog.near = near;
     this.fog.far = far;

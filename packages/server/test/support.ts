@@ -1,4 +1,4 @@
-import { generateWorld, newProgress, type GeneratedWorld, type MonsterType, type RandomSource, type ServerMessage } from '@lanternwood/shared';
+import { applyEntityUpdates, generateWorld, newProgress, type EntityState, type GeneratedWorld, type MonsterType, type RandomSource, type ServerMessage } from '@lanternwood/shared';
 import { GameWorld } from '../src/application/game-world';
 import type { ClientLink, SystemTime } from '../src/application/ports';
 import type { Monster } from '../src/domain/entities/monster';
@@ -64,5 +64,12 @@ export class FakeLink implements ClientLink {
 
   of<T extends ServerMessage['t']>(type: T): Extract<ServerMessage, { t: T }>[] {
     return this.sent.filter((m): m is Extract<ServerMessage, { t: T }> => m.t === type);
+  }
+
+  /** Everything in view after applying every snapshot's deltas, as the client would see it. */
+  view(): Map<number, EntityState> {
+    const known = new Map<number, EntityState>();
+    for (const s of this.of('snapshot')) applyEntityUpdates(known, s.ents, s.gone);
+    return known;
   }
 }

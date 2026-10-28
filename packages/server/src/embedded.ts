@@ -31,7 +31,7 @@ export interface EmbeddedServer {
 
 const SINGLE_PLAYER = {
   tickRate: 20,
-  snapshotEveryTicks: 2,
+  snapshotEveryTicks: 1,
   maxPlayers: 1,
   interestRadius: 80,
 } as const;

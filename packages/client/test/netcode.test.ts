@@ -4,6 +4,7 @@ import { Block, SIM_DT, VoxelWorld, copyBody, createBody, stepPlayer, type Input
 import { resolveServerUrl } from '../src/app/server-url';
 import { ClockSync } from '../src/state/clock-sync';
 import { EntityStore } from '../src/state/entity-store';
+import { PerformanceGovernor } from '../src/render/performance-governor';
 import { LocalPlayer } from '../src/state/local-player';
 import { SnapshotBuffer } from '../src/state/snapshot-buffer';
 
@@ -112,13 +113,34 @@ describe('SnapshotBuffer', () => {
 });
 
 describe('EntityStore', () => {
+  const puff = { k: 'm', id: 3, x: 0, y: 0, z: 0, yaw: 0, hp: 10, mhp: 10, lv: 1, ty: 'puffcap', sc: 1, st: 'idle' } as const;
+
   it('reports entities entering and leaving the area of interest', () => {
     const store = new EntityStore();
-    const puff = { k: 'm', id: 3, x: 0, y: 0, z: 0, yaw: 0, hp: 10, mhp: 10, lv: 1, ty: 'puffcap', sc: 1, st: 'idle' } as const;
-    assert.equal(store.apply([puff], 1).added.length, 1);
-    assert.equal(store.apply([puff], 1.1).added.length, 0);
-    const changes = store.apply([], 1.2);
+    assert.equal(store.apply([puff], [], 1).added.length, 1);
+    assert.equal(store.apply([], [], 1.1).added.length, 0, 'an unchanged entity is simply absent');
+    assert.equal(store.get(3)?.state.hp, 10);
+    const changes = store.apply([], [3], 1.2);
     assert.deepEqual(changes.removed.map((e) => e.id), [3]);
+    assert.equal(store.get(3), undefined);
+  });
+
+  it('merges patches into the known state', () => {
+    const store = new EntityStore();
+    store.apply([puff], [], 1);
+    store.apply([{ id: 3, x: 2, hp: 4, st: 'move' }], [], 1.05);
+    const s = store.get(3)?.state;
+    assert.deepEqual(s && { x: s.x, z: s.z, hp: s.hp, k: s.k }, { x: 2, z: 0, hp: 4, k: 'm' });
+  });
+
+  it('keeps interpolating smoothly for an entity that stood still and then moves', () => {
+    const store = new EntityStore();
+    store.apply([puff], [], 1);
+    for (let i = 1; i < 40; i++) store.apply([], [], 1 + i * 0.05); // standing still until 2.95 s, nothing sent
+    store.apply([{ id: 3, x: 1 }], [], 3);
+    store.interpolate(2.975);
+    const pose = store.get(3)!.pose;
+    assert.ok(Math.abs(pose.x - 0.5) < 0.05, `halfway between the last two samples, got ${pose.x}`);
   });
 });
 
@@ -130,9 +152,42 @@ describe('ClockSync and server URL', () => {
     assert.ok(clock.serverNow(101.05) > 10.85 && clock.serverNow(101.05) < 11.01);
   });
 
+  it('draws remote entities about one snapshot behind on a steady connection', () => {
+    const clock = new ClockSync();
+    for (let i = 0; i < 200; i++) clock.observe(i * 0.05, 50 + i * 0.05 + 0.03);
+    assert.ok(clock.targetDelay > 0.05 && clock.targetDelay < 0.08, `target ${clock.targetDelay}`);
+    let delay = 0;
+    for (let i = 0; i < 120; i++) delay = clock.renderDelay(1 / 60);
+    assert.ok(Math.abs(delay - clock.targetDelay) < 0.005, `eases to the target, got ${delay}`);
+  });
+
+  it('waits longer on a jittery connection', () => {
+    const clock = new ClockSync();
+    for (let i = 0; i < 200; i++) clock.observe(i * 0.05, 50 + i * 0.05 + 0.03 + (i % 5 === 0 ? 0.08 : 0));
+    assert.ok(clock.targetDelay > 0.12, `target ${clock.targetDelay}`);
+  });
+
   it('defaults to the page origin and accepts a ws:// override', () => {
     assert.equal(resolveServerUrl({ protocol: 'https:', host: 'game.example', search: '' }), 'wss://game.example/ws');
     assert.equal(resolveServerUrl({ protocol: 'http:', host: 'localhost:5173', search: '?server=ws://10.0.0.2:8080/ws' }), 'ws://10.0.0.2:8080/ws');
     assert.equal(resolveServerUrl({ protocol: 'http:', host: 'a', search: '?server=javascript:alert(1)' }), 'ws://a/ws');
+  });
+});
+
+describe('PerformanceGovernor', () => {
+  it('lowers quality one step at a time while the frame rate stays low, and never raises it', () => {
+    const applied: string[] = [];
+    const governor = new PerformanceGovernor(
+      ['a', 'b'].map((name) => ({ name, apply: () => applied.push(name) })),
+      30,
+      1,
+      0,
+    );
+    for (let i = 0; i < 60; i++) governor.sample(1 / 60);
+    assert.deepEqual(applied, [], 'fast enough: nothing changes');
+    for (let i = 0; i < 40; i++) governor.sample(1 / 10);
+    assert.deepEqual(applied, ['a', 'b']);
+    for (let i = 0; i < 40; i++) governor.sample(1 / 10);
+    assert.equal(governor.level, 2, 'no further steps once all are taken');
   });
 });

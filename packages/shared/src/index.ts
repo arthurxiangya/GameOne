@@ -30,3 +30,4 @@ export * from './protocol/messages';
 export * from './protocol/sanitize';
 export * from './protocol/validate';
 export * from './protocol/codec';
+export * from './protocol/entity-delta';

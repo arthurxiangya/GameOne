@@ -114,7 +114,7 @@ sequenceDiagram
   S->>W: drainEvents()
   S->>S: route each event to nearby or targeted players
   S->>N: progress (when changed)
-  S->>N: snapshot (every 2nd tick) = self + entities in radius + queued events
+  S->>N: snapshot (every tick, 20/s) = self + changed entities in radius + queued events
 ```
 
 - **Sleeping monsters.** Monsters more than 90 blocks from every player skip AI entirely.
@@ -139,12 +139,29 @@ sequenceDiagram
 ```
 
 - Client and server both run `stepPlayer` from `shared` at `SIM_DT = 1/20 s`. Same code and same inputs give the same result, so reconciliation is usually a no-op (`packages/client/test/netcode.test.ts` proves it converges).
-- **Speed-hack guard.** Each player earns one input credit per tick (capped at six). Extra frames wait in the queue or are dropped. Replayed or out-of-order sequence numbers are ignored. A client cannot move faster than real time, however many frames it sends.
+- **Input credit.** Each player earns one frame of credit per tick of real time. Credit banks up to one second (`MAX_INPUT_CREDIT`), and new players start with four frames. Input delayed by network jitter or a short stall is applied as soon as it arrives instead of queueing behind newer input, so there is no lasting input delay. Over any window, nobody can move faster than real time.
+- **Stale input is dropped.** Frames still waiting after credit runs out (more than `MAX_INPUT_BACKLOG`, four) are skipped and acknowledged. A long stall then costs one small correction rather than permanent lag for everyone watching. Replayed or out-of-order sequence numbers are ignored.
 - Players are simulated only when their frames arrive. A backgrounded tab simply stands still.
 
 ### Everyone else: interpolation
 
-Snapshots carry the server time `st`. `ClockSync` estimates the offset to the local clock, and each remote entity is drawn at `serverNow − 200 ms` by blending the two snapshots around that moment (`SnapshotBuffer`). Small extrapolation covers a late packet; beyond that the entity holds still rather than guessing.
+Snapshots go out every tick (20 per second) and carry the server time `st`. `ClockSync` estimates the offset to the local clock. Each remote entity is drawn a little in the past, blending the two snapshots around that moment (`SnapshotBuffer`).
+
+The **render delay adapts** to the connection: it is the snapshot spacing plus the 95th-percentile lateness of recent snapshots, clamped to 50–300 ms and eased so entities never jump in time. That comes to about 60 ms on a steady connection, against a fixed 200 ms before. Small extrapolation covers a late packet; beyond that the entity holds still rather than guessing.
+
+### Snapshot deltas
+
+Snapshots are delta-encoded per viewer (`SnapshotBuilder` remembers what each viewer was last sent):
+
+- An entity appears in full once.
+- After that, only the fields that changed are sent; an entity that changed nothing is left out.
+- `gone` lists entities that left the area of interest.
+
+TCP delivers in order, so patches always apply to the previous snapshot. This cut a typical snapshot near town from about 7 KB to about 1.2 KB, so 20 snapshots a second use less bandwidth than 10 full ones did.
+
+### Measured latency
+
+`packages/server/scripts/net-probe.ts` measures a running server with bots. The **Live probe** workflow runs it, plus two real browsers, against the deployed server; the **Load test** workflow runs it at increasing player counts. On the Render deployment, before this design (10 full snapshots/s, a fixed 200 ms render delay, a six-frame credit cap), one player saw another start moving about 167 ms after the input left, plus 200 ms of render delay. See `docs/CAPACITY.md` for current figures.
 
 ### Actions
 

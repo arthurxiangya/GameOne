@@ -76,7 +76,7 @@ The server reads environment variables (see [.env.example](.env.example)). Inval
 | `CLIENT_DIST` | `packages/client/dist` | Built client to serve |
 | `WORLD_SEED` | `2026` | Seed for the realm; clients generate the same terrain from it |
 | `TICK_RATE` | `20` | Simulation steps per second |
-| `SNAPSHOT_EVERY_TICKS` | `2` | Snapshot rate divisor (20 Hz ÷ 2 = 10 snapshots/s) |
+| `SNAPSHOT_EVERY_TICKS` | `1` | Snapshot rate divisor (20 Hz ÷ 1 = 20 snapshots/s) |
 | `MAX_PLAYERS` | `64` | Concurrent heroes |
 | `INTEREST_RADIUS` | `80` | Blocks; entities further away are not sent |
 | `AUTOSAVE_SECONDS` | `30` | Periodic save interval |

@@ -1,4 +1,4 @@
-import type { EntityState, GameEvent, SelfState, SnapshotMessage } from '@lanternwood/shared';
+import type { EntityState, EntityUpdate, GameEvent, SelfState, SnapshotMessage } from '@lanternwood/shared';
 import type { Monster } from '../domain/entities/monster';
 import type { Player } from '../domain/entities/player';
 import type { GameWorld } from './game-world';
@@ -8,21 +8,45 @@ const r3 = (v: number): number => Math.round(v * 1000) / 1000;
 /** Dead monsters stay in snapshots briefly so clients can play the death animation. */
 const CORPSE_SECONDS = 1.5;
 
-/** Builds each player's view of the world: themselves in full, everyone nearby in brief. */
+/**
+ * Builds each player's view of the world: themselves in full, everyone nearby as deltas.
+ * For every viewer it remembers what that viewer was last sent, so an entity appears in full
+ * once, then only as the fields that changed, and not at all while it stands still. Call
+ * `build` only for snapshots that are actually sent, and `forget` when the viewer leaves.
+ */
 export class SnapshotBuilder {
+  private readonly sent = new Map<number, Map<number, EntityState>>();
+
   constructor(
     private readonly world: GameWorld,
     private readonly interestRadius: number,
   ) {}
 
   build(viewer: Player, events: readonly GameEvent[]): SnapshotMessage {
-    const { x, z } = viewer.body;
-    const ents: EntityState[] = [];
-    for (const p of this.world.playersNear(x, z, this.interestRadius)) {
-      if (p !== viewer) ents.push(this.encodePlayer(p));
+    let known = this.sent.get(viewer.id);
+    if (!known) {
+      known = new Map();
+      this.sent.set(viewer.id, known);
     }
+    const { x, z } = viewer.body;
+    const ents: EntityUpdate[] = [];
+    const visible = new Set<number>();
+    const include = (state: EntityState): void => {
+      visible.add(state.id);
+      const update = diff(known.get(state.id), state);
+      if (update) ents.push(update);
+      known.set(state.id, state);
+    };
+    for (const p of this.world.playersNear(x, z, this.interestRadius)) if (p !== viewer) include(this.encodePlayer(p));
     for (const m of this.world.monstersNear(x, z, this.interestRadius)) {
-      if (m.alive || m.deadFor < CORPSE_SECONDS) ents.push(this.encodeMonster(m));
+      if (m.alive || m.deadFor < CORPSE_SECONDS) include(this.encodeMonster(m));
+    }
+    const gone: number[] = [];
+    for (const id of known.keys()) {
+      if (!visible.has(id)) {
+        gone.push(id);
+        known.delete(id);
+      }
     }
     return {
       t: 'snapshot',
@@ -32,8 +56,13 @@ export class SnapshotBuilder {
       ack: viewer.lastInputSeq,
       you: this.encodeSelf(viewer),
       ents,
+      gone,
       ev: events,
     };
+  }
+
+  forget(viewerId: number): void {
+    this.sent.delete(viewerId);
   }
 
   /** Full precision: the client replays its prediction on top of these exact values. */
@@ -59,4 +88,20 @@ export class SnapshotBuilder {
       hp: Math.max(0, Math.ceil(m.hp)), mhp: m.maxHp, lv: m.level, ty: m.type, sc: r2(m.scale), st: this.world.monsterAnim(m),
     };
   }
+}
+
+/** The full state for a newcomer, the changed fields for a known entity, or null if nothing changed. */
+function diff(previous: EntityState | undefined, next: EntityState): EntityUpdate | null {
+  if (!previous || previous.k !== next.k) return next;
+  const before = previous as unknown as Record<string, unknown>;
+  const after = next as unknown as Record<string, unknown>;
+  const patch: Record<string, unknown> = { id: next.id };
+  let changed = false;
+  for (const key of Object.keys(after)) {
+    if (before[key] !== after[key]) {
+      patch[key] = after[key];
+      changed = true;
+    }
+  }
+  return changed ? (patch as unknown as EntityUpdate) : null;
 }

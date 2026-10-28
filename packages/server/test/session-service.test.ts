@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { PROTOCOL_VERSION, newProgress } from '@lanternwood/shared';
+import { PROTOCOL_VERSION, isFullEntity, newProgress } from '@lanternwood/shared';
 import { nullLogger } from '../src/application/ports';
 import { CloseCode, SessionService } from '../src/application/session-service';
 import { InMemoryPlayerRepository } from '../src/infrastructure/persistence/in-memory-player-repository';
@@ -18,7 +18,7 @@ function setup(maxPlayers = 4) {
     logger: nullLogger,
     time,
     hashToken,
-    options: { maxPlayers, interestRadius: 80, snapshotEveryTicks: 2, tickRate: 20, dayLengthSeconds: 480 },
+    options: { maxPlayers, interestRadius: 80, snapshotEveryTicks: 1, tickRate: 20, dayLengthSeconds: 480 },
   });
   let n = 0;
   const join = async (name: string, secret = token(++n)): Promise<FakeLink> => {
@@ -111,13 +111,39 @@ describe('SessionService', () => {
     const b = await join('Bram');
     tick();
     tick();
-    const snapA = a.of('snapshot').at(-1);
-    const snapB = b.of('snapshot').at(-1);
     const idA = a.of('welcome')[0]!.you;
     const idB = b.of('welcome')[0]!.you;
-    assert.ok(snapA?.ents.some((e) => e.k === 'p' && e.id === idB));
-    assert.ok(snapB?.ents.some((e) => e.k === 'p' && e.id === idA));
-    assert.ok(snapA?.ents.some((e) => e.k === 'm'), 'monsters near town should be visible');
+    const viewA = a.view();
+    const viewB = b.view();
+    assert.equal(viewA.get(idB)?.k, 'p');
+    assert.equal(viewB.get(idA)?.k, 'p');
+    assert.ok([...viewA.values()].some((e) => e.k === 'm'), 'monsters near town should be visible');
+  });
+
+  it('sends each entity in full once, then only what changed', async () => {
+    const { join, tick } = setup();
+    const a = await join('Aria');
+    const b = await join('Bram');
+    const idB = b.of('welcome')[0]!.you;
+    tick();
+    tick();
+    const [first, second] = a.of('snapshot');
+    assert.ok(first?.ents.some((e) => e.id === idB && isFullEntity(e) && e.k === 'p' && e.nm === 'Bram'), 'first snapshot introduces Bram in full');
+    assert.ok(!second?.ents.some((e) => e.id === idB), 'a hero standing still is not sent again');
+    assert.ok(second!.ents.every((e) => !('ty' in e)), 'unchanged monster details are not resent');
+    assert.ok(JSON.stringify(second).length < JSON.stringify(first).length / 2, 'later snapshots are much smaller');
+  });
+
+  it('reports heroes that leave the area as gone', async () => {
+    const { sessions, join, tick } = setup();
+    const a = await join('Aria');
+    const b = await join('Bram');
+    const idB = b.of('welcome')[0]!.you;
+    tick();
+    await sessions.disconnect(b);
+    tick();
+    assert.ok(a.of('snapshot').at(-1)?.gone.includes(idB));
+    assert.equal(a.view().has(idB), false);
   });
 
   it('applies movement input and acknowledges it in the next snapshot', async () => {

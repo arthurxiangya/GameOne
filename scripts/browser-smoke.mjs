@@ -75,7 +75,12 @@ async function walk(player, ms) {
   await player.page.keyboard.up('w');
 }
 
+function report(label, s) {
+  annotate('notice', `${label}: ${s.fps} fps, quality step ${s.quality}, remote players drawn ${s.renderDelayMs} ms behind, ${s.pending} unacknowledged inputs`);
+}
+
 function checkRendering(label, s) {
+  report(label, s);
   check(s.terrainReady, `${label}: terrain finished building`);
   check(s.drawCalls > 10 && s.triangles > 5000, `${label}: the 3D scene renders (${s.drawCalls} draw calls, ${s.triangles} triangles)`);
   check(s.entities > 0, `${label}: monsters near town are visible (${s.entities})`);

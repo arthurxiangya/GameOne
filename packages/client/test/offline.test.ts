@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { PROTOCOL_VERSION, type ServerMessage } from '@lanternwood/shared';
+import { PROTOCOL_VERSION, isFullEntity, type ServerMessage } from '@lanternwood/shared';
 import { InMemoryPlayerRepository, createEmbeddedServer, localTokenHasher, type SystemTime } from '@lanternwood/server/embedded';
 import { resolvePlayMode } from '../src/app/play-mode';
 import { LoopbackTransport } from '../src/net/loopback-transport';
@@ -71,7 +71,7 @@ describe('single-player mode', () => {
         (m): m is Extract<ServerMessage, { t: 'snapshot' }> => m.t === 'snapshot' && m.ack === 6,
       );
       assert.ok(acked.you.z < 5, 'walking forward moves toward -z');
-      assert.ok(acked.ents.some((e) => e.k === 'm'), 'monsters near town are visible');
+      assert.ok(inbox.messages.some((m) => m.t === 'snapshot' && m.ents.some((e) => isFullEntity(e) && e.k === 'm')), 'monsters near town are visible');
 
       transport.close();
       await new Promise((r) => setTimeout(r, 10));

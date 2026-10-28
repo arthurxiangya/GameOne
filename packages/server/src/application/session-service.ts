@@ -305,6 +305,7 @@ export class SessionService {
     if (!player) return;
     session.player = null;
     this.byPlayer.delete(player.id);
+    this.snapshots.forget(player.id);
     if (this.byAccount.get(player.accountId) === session) this.byAccount.delete(player.accountId);
     this.deps.world.removePlayer(player.id);
     if (announce) this.broadcastSystem(`${player.name} left the realm.`);
