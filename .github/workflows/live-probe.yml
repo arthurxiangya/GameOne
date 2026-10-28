@@ -15,6 +15,9 @@ on:
       seconds:
         description: Seconds to measure
         default: '30'
+      expect:
+        description: Wait until /healthz contains this text (for example a deployed commit)
+        default: '"protocol":2'
   push:
     branches: ['probe/**']
 
@@ -25,20 +28,22 @@ jobs:
       URL: ${{ inputs.url || 'wss://lanternwood-realms.onrender.com/ws' }}
       BOTS: ${{ inputs.bots || '2' }}
       SECONDS_TO_RUN: ${{ inputs.seconds || '30' }}
+      EXPECT: ${{ inputs.expect || '"protocol":2' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
-      - name: Wake the server (free instances sleep when idle)
+      - name: Wake the server and wait for the expected version
         run: |
           HEALTH="$(echo "$URL" | sed -e 's#^ws#http#' -e 's#/ws/*$#/healthz#')"
-          for i in $(seq 1 36); do
-            if curl -fsS -m 20 "$HEALTH"; then echo; exit 0; fi
-            sleep 5
+          for i in $(seq 1 90); do
+            BODY="$(curl -fsS -m 20 "$HEALTH" || true)"
+            if [ -n "$BODY" ] && echo "$BODY" | grep -qF -- "$EXPECT"; then echo "$BODY"; exit 0; fi
+            sleep 10
           done
-          echo "::error::$HEALTH did not answer within 3 minutes"
+          echo "::error::$HEALTH did not report $EXPECT within 15 minutes (last: $BODY)"
           exit 1
       - name: Probe
         run: npx tsx packages/server/scripts/net-probe.ts "$URL" --bots "$BOTS" --seconds "$SECONDS_TO_RUN" --annotate

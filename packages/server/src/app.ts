@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { MAX_CLIENT_MESSAGE_BYTES } from '@lanternwood/shared';
+import { MAX_CLIENT_MESSAGE_BYTES, PROTOCOL_VERSION } from '@lanternwood/shared';
 import type { GameWorld } from './application/game-world';
 import type { Logger, SystemTime } from './application/ports';
 import type { SessionService } from './application/session-service';
@@ -45,6 +45,8 @@ export function createGameServer({ config, logger, time, repository }: GameServe
     logger: logger.child({ component: 'http' }),
     health: () => ({
       status: 'ok',
+      protocol: PROTOCOL_VERSION,
+      commit: config.commit,
       players: sessions.playerCount,
       connections: sessions.connectionCount,
       tick: world.tick,

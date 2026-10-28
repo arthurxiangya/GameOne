@@ -18,6 +18,8 @@ export interface ServerConfig {
   readonly allowedOrigins: readonly string[];
   /** Salt for hashing guest tokens into account ids. Keep it stable across restarts. */
   readonly tokenSalt: string;
+  /** Deployed commit, shown on /healthz (Render sets RENDER_GIT_COMMIT). */
+  readonly commit: string | null;
 }
 
 export class ConfigError extends Error {
@@ -64,6 +66,7 @@ export function loadConfig(env: Env, cwd: string = process.cwd()): ServerConfig 
     logLevel: isLogLevel(logLevel) ? logLevel : 'info',
     allowedOrigins: (env.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
     tokenSalt: env.TOKEN_SALT || 'lanternwood-realms',
+    commit: (env.GIT_COMMIT || env.RENDER_GIT_COMMIT || '').slice(0, 12) || null,
   };
   if (problems.length > 0) throw new ConfigError(problems);
   return config;

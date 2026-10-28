@@ -96,6 +96,7 @@ packages/
 docs/
   ARCHITECTURE.md   How the system fits together, with diagrams
   PROTOCOL.md       Every message on the wire
+  CAPACITY.md       Measured player capacity, latency, and the protocol choice
   adr/              Architecture decision records
 ```
 
