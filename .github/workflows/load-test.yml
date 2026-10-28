@@ -1,0 +1,67 @@
+name: Load test
+
+# Starts a fresh server for each player count, connects that many bots (all in the one shared
+# realm, all walking), and reports the server's tick cost, latency and bandwidth as annotations.
+# Start it from the Actions tab, or push a loadtest/* branch.
+on:
+  workflow_dispatch:
+    inputs:
+      counts:
+        description: Bot counts to test, space separated
+        default: '50 100 200 300 400'
+      seconds:
+        description: Seconds to measure at each count
+        default: '20'
+  push:
+    branches: ['loadtest/**']
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    env:
+      COUNTS: ${{ inputs.counts || '50 100 200 300 400' }}
+      SECONDS_TO_RUN: ${{ inputs.seconds || '20' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run build -w @lanternwood/server
+      - name: Run
+        run: |
+          echo "Runner: $(nproc) CPUs, $(free -g | awk '/Mem:/ {print $2}') GB"
+          for n in $COUNTS; do
+            PORT=8080 HOST=127.0.0.1 DATA_DIR="$RUNNER_TEMP/data-$n" LOG_LEVEL=warn MAX_PLAYERS=5000 \
+              node packages/server/dist/main.js > "server-$n.log" 2>&1 &
+            SERVER=$!
+            up=0
+            for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/healthz > /dev/null && { up=1; break; }; sleep 1; done
+            if [ "$up" != 1 ]; then echo "::error title=server did not start::$(tail -c 900 "server-$n.log" | tr '\n' ' ')"; exit 1; fi
+            # Spread the bots over several processes so the bots, not the server, never become the bottleneck.
+            per=$(( (n + 2) / 3 ))
+            probes=""
+            for p in 1 2 3; do
+              npx tsx packages/server/scripts/net-probe.ts ws://127.0.0.1:8080/ws --bots "$per" --seconds "$SECONDS_TO_RUN" > "probe-$n-$p.json" &
+              probes="$probes $!"
+            done
+            wait $probes
+            node -e '
+              const n = process.argv[1];
+              const runs = [1, 2, 3].map((p) => JSON.parse(require("fs").readFileSync(`probe-${n}-${p}.json`, "utf8")));
+              const r = runs[0];
+              const pick = (k) => runs.map((x) => x[k].p95).reduce((a, b) => Math.max(a, b), 0);
+              const summary = {
+                players: runs.reduce((s, x) => s + x.bots, 0),
+                server: r.serverDuringRun,
+                inputAckP95Ms: pick("inputAckMs"),
+                snapshotGapP95Ms: pick("snapshotGapMs"),
+                snapshotBytesP50: r.snapshotBytes.p50,
+                downloadKBpsPerPlayer: r.downloadKBpsPerBot,
+                serverUploadMBps: Number(((runs.reduce((s, x) => s + x.downloadKBpsPerBot * x.bots, 0)) / 1024).toFixed(1)),
+                errors: runs.flatMap((x) => x.errors).slice(0, 3),
+              };
+              console.log(`::notice title=${summary.players} players::${JSON.stringify(summary)}`);
+            ' "$n"
+            kill $SERVER; wait $SERVER 2>/dev/null || true
+          done

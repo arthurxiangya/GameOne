@@ -18,6 +18,8 @@ export interface ServerConfig {
   readonly allowedOrigins: readonly string[];
   /** Salt for hashing guest tokens into account ids. Keep it stable across restarts. */
   readonly tokenSalt: string;
+  /** Deployed commit, shown on /healthz (Render sets RENDER_GIT_COMMIT). */
+  readonly commit: string | null;
 }
 
 export class ConfigError extends Error {
@@ -56,14 +58,15 @@ export function loadConfig(env: Env, cwd: string = process.cwd()): ServerConfig 
     clientDist: env.CLIENT_DIST ? resolve(cwd, env.CLIENT_DIST) : DEFAULT_CLIENT_DIST,
     worldSeed: int('WORLD_SEED', 2026, 0, 2 ** 31 - 1),
     tickRate: int('TICK_RATE', 20, 10, 60),
-    snapshotEveryTicks: int('SNAPSHOT_EVERY_TICKS', 2, 1, 10),
-    maxPlayers: int('MAX_PLAYERS', 64, 1, 1000),
+    snapshotEveryTicks: int('SNAPSHOT_EVERY_TICKS', 1, 1, 10),
+    maxPlayers: int('MAX_PLAYERS', 64, 1, 10000),
     interestRadius: int('INTEREST_RADIUS', 80, 20, 200),
     autosaveSeconds: int('AUTOSAVE_SECONDS', 30, 5, 3600),
     dayLengthSeconds: int('DAY_LENGTH_SECONDS', 480, 30, 86400),
     logLevel: isLogLevel(logLevel) ? logLevel : 'info',
     allowedOrigins: (env.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
     tokenSalt: env.TOKEN_SALT || 'lanternwood-realms',
+    commit: (env.GIT_COMMIT || env.RENDER_GIT_COMMIT || '').slice(0, 12) || null,
   };
   if (problems.length > 0) throw new ConfigError(problems);
   return config;

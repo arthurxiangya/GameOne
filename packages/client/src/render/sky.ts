@@ -97,6 +97,11 @@ export class SkySystem {
     scene.add(this.hemi, this.sun, this.moon, this.sunTarget, this.heroLight, this.townLight);
   }
 
+  /** Turns off sun shadows, the most expensive part of a frame on slow GPUs. */
+  disableShadows(): void {
+    this.sun.castShadow = false;
+  }
+
   /** `timeOfDay` in [0, 1); `focus` is where shadows should be sharp (the player). */
   update(timeOfDay: number, focus: Readonly<Vec3>, camera: THREE.PerspectiveCamera, dt: number): void {
     let i = 0;

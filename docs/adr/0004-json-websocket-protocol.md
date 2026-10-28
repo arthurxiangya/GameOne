@@ -13,9 +13,9 @@ Browsers need a bidirectional, low-latency channel that works through proxies an
 - Keep message types in `shared/protocol` so both sides compile against the same definitions.
 - Validate every client message structurally on the server (`parseClientMessage`); never trust a client field.
 - Version the protocol and reject mismatched clients at `hello`.
-- Snapshots are full (not delta) views of the area of interest at 10 Hz.
+- Snapshots cover the area of interest. They started as full views at 10 Hz; ADR 0007 moved them to per-viewer deltas at 20 Hz.
 
 ## Consequences
 
-- Each player receives roughly 3–6 KB per snapshot near busy areas, about 50 KB/s, which is fine for tens to hundreds of players.
+- With full snapshots each player received about 7 KB per snapshot near town, about 70 KB/s. Deltas brought that to about 1.2 KB per snapshot, about 21 KB/s at twice the rate.
 - The codec is isolated in `encodeMessage`/`decodeServerMessage`. Moving to a binary format with delta compression is a contained change if bandwidth becomes a cost.

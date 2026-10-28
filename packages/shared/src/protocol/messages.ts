@@ -4,8 +4,8 @@ import type { PlayerProgress } from '../game/progress';
 import type { SkillId } from '../game/skills';
 
 /**
- * Wire protocol v1. Messages are JSON objects discriminated by `t`.
- * Field names are short because snapshots are sent ten times a second.
+ * Wire protocol v2. Messages are JSON objects discriminated by `t`.
+ * Field names are short because snapshots are sent twenty times a second.
  */
 
 // ---------------------------------------------------------------- client -> server
@@ -65,6 +65,21 @@ export interface MonsterEntityState {
 }
 
 export type EntityState = PlayerEntityState | MonsterEntityState;
+
+/** Player fields that can change after the player first appears. */
+export type PlayerEntityPatch = { readonly id: number } & Partial<Omit<PlayerEntityState, 'k' | 'id'>>;
+/** Monster fields that can change after the monster first appears. */
+export type MonsterEntityPatch = { readonly id: number } & Partial<Omit<MonsterEntityState, 'k' | 'id'>>;
+
+/**
+ * Delta encoding: the first time an entity is sent to a player it arrives in full (with `k`);
+ * after that only the fields that changed since the previous snapshot are sent, and an entity
+ * that changed nothing is left out. The stream is reliable and ordered, so patches always
+ * apply on top of the previous snapshot.
+ */
+export type EntityUpdate = EntityState | PlayerEntityPatch | MonsterEntityPatch;
+
+export const isFullEntity = (u: EntityUpdate): u is EntityState => 'k' in u;
 
 /** The receiving player's own authoritative state. */
 export interface SelfState {
@@ -126,7 +141,10 @@ export type ServerMessage =
       /** Highest input sequence number the server has applied for this player. */
       readonly ack: number;
       readonly you: SelfState;
-      readonly ents: readonly EntityState[];
+      /** New entities in full, changed ones as patches (see EntityUpdate). */
+      readonly ents: readonly EntityUpdate[];
+      /** Entities that left this player's area of interest (or despawned). */
+      readonly gone: readonly number[];
       readonly ev: readonly GameEvent[];
     }
   | { readonly t: 'progress'; readonly p: PlayerProgress }

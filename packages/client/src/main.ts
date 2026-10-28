@@ -1,4 +1,4 @@
-import { createEmbeddedServer, type EmbeddedServer } from '@lanternwood/server/embedded';
+import { createEmbeddedServer, type EmbeddedServer, type LoopStats } from '@lanternwood/server/embedded';
 import { GameClient } from './app/game-client';
 import { resolvePlayMode } from './app/play-mode';
 import { LoopbackTransport } from './net/loopback-transport';
@@ -11,6 +11,8 @@ declare global {
   interface Window {
     /** The running client, for debugging and automated browser checks. */
     lanternwood?: GameClient;
+    /** Single-player only: tick timing of the in-page server. */
+    lanternwoodServerStats?: () => LoopStats | null;
   }
 }
 
@@ -31,6 +33,7 @@ function offlineTransport(): TransportFactory {
   const getServer = (): EmbeddedServer =>
     (server ??= createEmbeddedServer({ repository: new LocalStoragePlayerRepository(browserStorage()), time: browserTime }));
   const save = (): void => void server?.saveAll();
+  window.lanternwoodServerStats = () => server?.stats() ?? null;
   window.addEventListener('pagehide', save);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) save();

@@ -1,9 +1,11 @@
 import { nullLogger, type ClientLink, type SystemTime } from './application/ports';
 import type { PlayerRepository } from './domain/ports';
+import type { LoopStats } from './infrastructure/scheduling/fixed-step-loop';
 import { createSimulation } from './simulation';
 
 export type { ClientLink, SystemTime } from './application/ports';
 export type { PlayerRecord, PlayerRepository } from './domain/ports';
+export type { LoopStats } from './infrastructure/scheduling/fixed-step-loop';
 export { parsePlayerRecord } from './domain/player-record';
 export { InMemoryPlayerRepository } from './infrastructure/persistence/in-memory-player-repository';
 
@@ -25,13 +27,15 @@ export interface EmbeddedConnection {
 
 export interface EmbeddedServer {
   connect(link: ClientLink): EmbeddedConnection;
+  /** Tick timing of the in-page simulation, as /healthz reports it online. */
+  stats(): LoopStats;
   saveAll(): Promise<void>;
   stop(): Promise<void>;
 }
 
 const SINGLE_PLAYER = {
   tickRate: 20,
-  snapshotEveryTicks: 2,
+  snapshotEveryTicks: 1,
   maxPlayers: 1,
   interestRadius: 80,
 } as const;
@@ -90,6 +94,7 @@ export function createEmbeddedServer(options: EmbeddedServerOptions): EmbeddedSe
         disconnect: () => sessions.disconnect(link),
       };
     },
+    stats: () => loop.stats(),
     saveAll: () => sessions.saveAll(),
     async stop() {
       if (autosave) clearInterval(autosave);

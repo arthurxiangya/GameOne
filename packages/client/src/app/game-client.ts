@@ -30,6 +30,7 @@ import type { Transport, TransportFactory } from '../net/transport';
 import { CameraRig } from '../render/camera-rig';
 import { Effects } from '../render/effects';
 import { EntityViews } from '../render/entity-views';
+import { FpsMeter, PerformanceGovernor } from '../render/performance-governor';
 import { SceneContext } from '../render/scene-context';
 import { SkySystem } from '../render/sky';
 import { TerrainRenderer } from '../render/terrain';
@@ -57,8 +58,6 @@ export interface GameClientOptions {
 
 type Phase = 'title' | 'connecting' | 'playing';
 
-/** Remote entities are drawn this far in the past so there are two snapshots to blend. */
-const INTERP_DELAY = 0.2;
 const DEFAULT_SEED = 2026;
 const MAX_STEPS_PER_FRAME = 5;
 const DRAW_DISTANCE_TITLE: [number, number] = [160, 320];
@@ -93,7 +92,12 @@ export class GameClient {
   private readonly entities = new EntityStore();
   private readonly clock = new ClockSync();
   private readonly identity: Identity;
-  private readonly drawDistancePlay: [number, number];
+  private drawDistancePlay: [number, number];
+  private readonly fpsMeter = new FpsMeter();
+  private readonly governor: PerformanceGovernor;
+  private renderDelay = 0.1;
+  /** Longest frame since joining, in seconds: shows hitches such as shader compilation. */
+  private longestFrame = 0;
 
   private generated: GeneratedWorld | null = null;
   private local: LocalPlayer | null = null;
@@ -133,6 +137,17 @@ export class GameClient {
     this.ctx = new SceneContext(byId('scene'), options.lowPower);
     this.ctx.setDrawDistance(...DRAW_DISTANCE_TITLE);
     this.sky = new SkySystem(this.ctx.scene, this.ctx.fog, options.lowPower);
+    this.governor = new PerformanceGovernor([
+      { name: 'sharpness', apply: () => this.ctx.setPixelRatio(1) },
+      { name: 'shadows', apply: () => this.sky.disableShadows() },
+      {
+        name: 'draw distance',
+        apply: () => {
+          this.drawDistancePlay = [this.drawDistancePlay[0] * 0.75, this.drawDistancePlay[1] * 0.75];
+          if (this.phase === 'playing') this.ctx.setDrawDistance(...this.drawDistancePlay);
+        },
+      },
+    ]);
     this.terrain = new TerrainRenderer(this.ctx.scene, options.reduceMotion);
     this.views = new EntityViews(this.ctx.scene);
     this.effects = new Effects(this.ctx.scene);
@@ -297,6 +312,7 @@ export class GameClient {
     this.dayLength = msg.dayLength;
     this.timeOfDay = msg.day;
     this.haveSnapshot = false;
+    this.longestFrame = 0;
     this.cooldowns = zeroCooldowns();
     this.views.addHero(msg.you, msg.look);
     if (this.generated && this.local) this.local.reset(this.generated.playerSpawn);
@@ -317,7 +333,9 @@ export class GameClient {
   private onSnapshot(msg: SnapshotMessage): void {
     const local = this.local;
     if (!local) return;
-    this.clock.observe(msg.st, this.now);
+    // Stamp with when the message is handled, not the start of the current frame: at low frame
+    // rates that would make every snapshot look up to a frame late.
+    this.clock.observe(msg.st, performance.now() / 1000);
     this.timeOfDay = msg.day;
     this.self = msg.you;
     this.cooldowns = { ...msg.you.cd };
@@ -330,7 +348,7 @@ export class GameClient {
     this.hud.setVitals(msg.you);
     byId('death').hidden = !msg.you.dead;
 
-    const { added, removed } = this.entities.apply(msg.ents, msg.st);
+    const { added, removed } = this.entities.apply(msg.ents, msg.gone, msg.st);
     for (const e of added) this.addEntityView(e);
     for (const e of removed) {
       this.views.remove(e.id);
@@ -513,7 +531,10 @@ export class GameClient {
       this.title.setReady();
     }
 
-    if (this.phase === 'playing') this.updatePlaying(dt, elapsed);
+    if (this.phase === 'playing') {
+      this.longestFrame = Math.max(this.longestFrame, raw);
+      this.updatePlaying(dt, elapsed);
+    }
     else {
       this.cameraRig.orbit(dt);
       this.timeOfDay = (this.timeOfDay + dt / this.dayLength) % 1;
@@ -560,7 +581,12 @@ export class GameClient {
     if (lamp) this.sky.heroLight.position.set(lamp.x, lamp.y, lamp.z);
     this.sky.heroLight.intensity = 10 * this.sky.night;
 
-    this.entities.interpolate(this.clock.serverNow(this.now) - INTERP_DELAY);
+    this.renderDelay = this.clock.renderDelay(elapsed);
+    this.entities.interpolate(this.clock.serverNow(this.now) - this.renderDelay);
+    if (this.fpsMeter.sample(elapsed)) this.hud.setFps(this.fpsMeter.fps);
+    if (this.terrain.ready && this.governor.sample(elapsed) && this.governor.level === 1) {
+      this.notices.toast('Lowered graphics quality to keep movement smooth', 2.6);
+    }
     for (const e of this.entities.all()) this.updateEntity(e, dt);
     this.views.updateNpcs(this.renderPos, dt, this.now);
     this.updateNpcs();
@@ -735,6 +761,12 @@ export class GameClient {
     target: EntityState | null;
     drawCalls: number;
     triangles: number;
+    fps: number;
+    quality: number;
+    renderDelayMs: number;
+    corrections: number;
+    snaps: number;
+    longestFrameMs: number;
   } {
     const stats = this.ctx.renderStats;
     const players: { name: string; x: number; z: number }[] = [];
@@ -750,6 +782,12 @@ export class GameClient {
       target: this.targetId !== null ? this.entities.get(this.targetId)?.state ?? null : null,
       drawCalls: stats.calls,
       triangles: stats.triangles,
+      fps: Math.round(this.fpsMeter.fps),
+      quality: this.governor.level,
+      renderDelayMs: Math.round(this.renderDelay * 1000),
+      corrections: this.local?.corrections ?? 0,
+      snaps: this.local?.snaps ?? 0,
+      longestFrameMs: Math.round(this.longestFrame * 1000),
     };
   }
 }

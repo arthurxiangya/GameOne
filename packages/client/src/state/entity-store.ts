@@ -1,9 +1,9 @@
-import type { EntityState } from '@lanternwood/shared';
+import { isFullEntity, mergeEntityUpdate, type EntityState, type EntityUpdate } from '@lanternwood/shared';
 import { SnapshotBuffer, type Pose } from './snapshot-buffer';
 
 export interface RemoteEntity {
   readonly id: number;
-  /** Latest authoritative state. */
+  /** Latest authoritative state, with every delta applied. */
   state: EntityState;
   readonly buffer: SnapshotBuffer;
   /** Interpolated pose for the current frame. */
@@ -19,26 +19,39 @@ export interface StoreChanges {
 export class EntityStore {
   private readonly entities = new Map<number, RemoteEntity>();
 
-  apply(states: readonly EntityState[], serverTime: number): StoreChanges {
+  /**
+   * Applies one snapshot. New entities arrive in full, known ones as patches of what changed,
+   * and an entity that changed nothing is simply absent; `gone` lists those that left.
+   */
+  apply(updates: readonly EntityUpdate[], gone: readonly number[], serverTime: number): StoreChanges {
     const added: RemoteEntity[] = [];
-    const seen = new Set<number>();
-    for (const state of states) {
-      seen.add(state.id);
-      let entity = this.entities.get(state.id);
-      if (!entity) {
-        entity = { id: state.id, state, buffer: new SnapshotBuffer(), pose: { x: state.x, y: state.y, z: state.z, yaw: state.yaw } };
-        this.entities.set(state.id, entity);
+    for (const update of updates) {
+      const existing = this.entities.get(update.id);
+      if (existing) {
+        const merged = mergeEntityUpdate(existing.state, update);
+        if (merged) existing.state = merged;
+      } else if (isFullEntity(update)) {
+        const entity: RemoteEntity = {
+          id: update.id,
+          state: update,
+          buffer: new SnapshotBuffer(),
+          pose: { x: update.x, y: update.y, z: update.z, yaw: update.yaw },
+        };
+        this.entities.set(update.id, entity);
         added.push(entity);
       }
-      entity.state = state;
-      entity.buffer.push({ t: serverTime, x: state.x, y: state.y, z: state.z, yaw: state.yaw });
     }
     const removed: RemoteEntity[] = [];
-    for (const [id, entity] of this.entities) {
-      if (!seen.has(id)) {
-        this.entities.delete(id);
-        removed.push(entity);
-      }
+    for (const id of gone) {
+      const entity = this.entities.get(id);
+      if (!entity) continue;
+      this.entities.delete(id);
+      removed.push(entity);
+    }
+    // Every entity still in view gets a sample, moving or not, so interpolation always has a
+    // recent pair of samples and an entity that starts moving after standing still doesn't skip.
+    for (const e of this.entities.values()) {
+      e.buffer.push({ t: serverTime, x: e.state.x, y: e.state.y, z: e.state.z, yaw: e.state.yaw });
     }
     return { added, removed };
   }

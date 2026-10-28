@@ -28,11 +28,16 @@ export class FixedStepLoop {
   private lagResets = 0;
   private errors = 0;
 
+  /**
+   * `onDroppedTime` hears about real time the loop skipped after falling behind, so anything that
+   * must track the wall clock (input credit) can account for it.
+   */
   constructor(
     hz: number,
     private readonly step: (dt: number) => void,
     private readonly time: SystemTime,
     private readonly logger: Logger,
+    private readonly onDroppedTime?: (seconds: number) => void,
   ) {
     this.dt = 1 / hz;
   }
@@ -73,9 +78,11 @@ export class FixedStepLoop {
       steps++;
     }
     if (this.accumulator >= this.dt) {
+      const dropped = this.accumulator;
       this.lagResets++;
-      this.logger.warn('simulation fell behind; dropping time', { droppedSeconds: Math.round(this.accumulator * 1000) / 1000 });
+      this.logger.warn('simulation fell behind; dropping time', { droppedSeconds: Math.round(dropped * 1000) / 1000 });
       this.accumulator = 0;
+      this.onDroppedTime?.(dropped);
     }
     if (this.timer) this.schedule(Math.max(0, (this.dt - this.accumulator) * 1000));
   }

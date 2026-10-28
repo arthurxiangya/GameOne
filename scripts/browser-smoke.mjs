@@ -75,7 +75,12 @@ async function walk(player, ms) {
   await player.page.keyboard.up('w');
 }
 
+function report(label, s) {
+  annotate('notice', `${label}: ${s.fps} fps, longest frame ${s.longestFrameMs} ms, quality step ${s.quality}, remote players drawn ${s.renderDelayMs} ms behind, ${s.pending} unacknowledged inputs, ${s.corrections} corrections, ${s.snaps} snaps`);
+}
+
 function checkRendering(label, s) {
+  report(label, s);
   check(s.terrainReady, `${label}: terrain finished building`);
   check(s.drawCalls > 10 && s.triangles > 5000, `${label}: the 3D scene renders (${s.drawCalls} draw calls, ${s.triangles} triangles)`);
   check(s.entities > 0, `${label}: monsters near town are visible (${s.entities})`);
@@ -146,11 +151,27 @@ async function preview(browser, dir) {
   try {
     solo = await openPlayer(browser, `${url}standalone.html`, 'Solo');
     check(await solo.page.evaluate(() => document.body.classList.contains('offline')), 'preview runs in single-player mode');
+    const joined = await state(solo);
+    report('preview right after joining', joined);
+    // Let first-use work (shader compilation) finish, as a player would before walking off.
+    await solo.page.waitForTimeout(2000);
     const start = await state(solo);
-    await walk(solo, 1500);
+    const trace = [];
+    await solo.page.keyboard.down('w');
+    for (let i = 0; i < 15; i++) {
+      await solo.page.waitForTimeout(100);
+      const s = await state(solo);
+      trace.push(`${distance(start.position, s.position).toFixed(1)}/${s.pending}/${s.fps}`);
+    }
+    await solo.page.keyboard.up('w');
     await solo.page.waitForTimeout(500);
     const moved = await state(solo);
-    check(distance(start.position, moved.position) > 2, `hero walks (${distance(start.position, moved.position).toFixed(1)} blocks)`);
+    const walked = distance(start.position, moved.position);
+    check(walked > 2, `hero walks (${walked.toFixed(1)} blocks)`);
+    if (walked <= 2) {
+      const server = await solo.page.evaluate(() => window.lanternwoodServerStats?.() ?? null);
+      annotate('warning', `walk trace (blocks/pending/fps every 100 ms): ${trace.join(' ')}; corrections ${moved.corrections}, snaps ${moved.snaps}, longest frame ${moved.longestFrameMs} ms, in-page server ${JSON.stringify(server)}`);
+    }
     check(moved.pending < 20, `the in-page server acknowledges input (${moved.pending} unacknowledged frames)`);
     checkRendering('preview', moved);
     check(start.hp > 0, `hero has health (${start.hp})`);

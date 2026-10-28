@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { NPCS, QUESTS, type InputFrame } from '@lanternwood/shared';
+import { NPCS, PHYSICS, QUESTS, SIM_DT, type InputFrame } from '@lanternwood/shared';
+import { INITIAL_INPUT_CREDIT, MAX_INPUT_BACKLOG, MAX_INPUT_CREDIT } from '../src/application/game-world';
 import { makeWorld, monsterOf, runTicks, spawnHero, standNextTo } from './support';
 
 const forward = (seq: number): InputFrame => ({ seq, fwd: 1, strafe: 0, yaw: 0, jump: false, swim: false });
@@ -15,12 +16,62 @@ describe('GameWorld', () => {
     assert.ok(Math.abs(hero.body.y - 12.5) < 1e-6, `y = ${hero.body.y}`);
   });
 
-  it('simulates at most one input frame per tick, so clients cannot speed hack', () => {
+  it('never lets a flood of input move a hero faster than real time allows', () => {
     const world = makeWorld();
     const hero = spawnHero(world);
-    world.queueInput(hero.id, Array.from({ length: 30 }, (_, i) => forward(i + 1)));
+    world.queueInput(hero.id, [forward(1)]);
+    world.step(0.05);
+    const start = { x: hero.body.x, z: hero.body.z };
+    world.queueInput(hero.id, Array.from({ length: 30 }, (_, i) => forward(i + 2)));
     runTicks(world, 5);
-    assert.equal(hero.lastInputSeq, 5);
+    const moved = Math.hypot(hero.body.x - start.x, hero.body.z - start.z);
+    const allowed = (INITIAL_INPUT_CREDIT + 5) * PHYSICS.walkSpeed * SIM_DT;
+    assert.ok(moved <= allowed + 1e-6, `moved ${moved.toFixed(2)} blocks, allowed ${allowed.toFixed(2)}`);
+    assert.ok(hero.inputQueue.length <= MAX_INPUT_BACKLOG);
+  });
+
+  it('absorbs network jitter without building an input queue', () => {
+    const world = makeWorld();
+    const hero = spawnHero(world);
+    let seq = 0;
+    for (let tick = 0; tick < 40; tick++) {
+      // Frames arrive in pairs every other tick: the same rate as the server, but bunched.
+      if (tick % 2 === 0) world.queueInput(hero.id, [forward(++seq), forward(++seq)]);
+      world.step(0.05);
+      assert.equal(hero.lastInputSeq, seq, `tick ${tick}: everything received so far is applied`);
+    }
+  });
+
+  it('catches up input that a network hiccup delayed, all in one tick', () => {
+    const world = makeWorld();
+    const hero = spawnHero(world);
+    runTicks(world, 12); // 0.6 s with nothing arriving
+    world.queueInput(hero.id, Array.from({ length: 12 }, (_, i) => forward(i + 1)));
+    world.step(0.05);
+    assert.equal(hero.lastInputSeq, 12);
+    assert.equal(hero.inputQueue.length, 0);
+  });
+
+  it('keeps input credit on real time when the simulation has to skip time', () => {
+    const world = makeWorld();
+    const hero = spawnHero(world);
+    world.step(0.05);
+    world.creditRealTime(0.6); // the loop fell behind and dropped 0.6 s
+    world.queueInput(hero.id, Array.from({ length: 16 }, (_, i) => forward(i + 1)));
+    world.step(0.05);
+    assert.equal(hero.lastInputSeq, 16, 'input sent during the skipped time is applied, not dropped');
+    assert.equal(hero.inputQueue.length, 0);
+  });
+
+  it('drops stale input after a long stall instead of lagging behind for good', () => {
+    const world = makeWorld();
+    const hero = spawnHero(world);
+    runTicks(world, 60); // 3 s stall: more than the bank can cover
+    world.queueInput(hero.id, Array.from({ length: 40 }, (_, i) => forward(i + 1)));
+    world.step(0.05);
+    assert.ok(hero.inputQueue.length <= MAX_INPUT_BACKLOG);
+    assert.ok(hero.lastInputSeq >= 40 - MAX_INPUT_BACKLOG, 'skipped frames are acknowledged');
+    assert.ok(MAX_INPUT_CREDIT * SIM_DT <= 1.0001, 'the bank never covers more than a second');
   });
 
   it('ignores replayed and out-of-order frames', () => {
