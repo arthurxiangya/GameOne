@@ -2,7 +2,8 @@ name: Load test
 
 # Starts a fresh server for each player count, connects that many bots (all in the one shared
 # realm, all walking), and reports the server's tick cost, latency and bandwidth as annotations.
-# Start it from the Actions tab, or push a loadtest/* branch.
+# Start it from the Actions tab. (Manual only, so its result never lands on a commit Render is
+# waiting to deploy.)
 on:
   workflow_dispatch:
     inputs:
@@ -12,8 +13,6 @@ on:
       seconds:
         description: Seconds to measure at each count
         default: '20'
-  push:
-    branches: ['loadtest/**']
 
 jobs:
   load:

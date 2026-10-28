@@ -15,6 +15,8 @@ A voxel MMORPG for the browser. An authoritative Node.js game server simulates a
 
 The button creates a free Render web service from [render.yaml](render.yaml), building the Dockerfile. When the deploy finishes, open the service's `onrender.com` address on any device; everyone who opens it plays in the same realm. After that, every push to `main` redeploys once CI passes.
 
+Render deploys a new commit on `main` once all of that commit's GitHub checks pass (`autoDeployTrigger: checksPass`). `/healthz` shows the protocol version and, on Render, the deployed commit, so you can confirm what's live. If a deploy doesn't start, for example because Render isn't connected to your GitHub account or a check failed, use **Manual Deploy → Deploy latest commit** on the service page.
+
 On the free plan the service sleeps after 15 idle minutes (the first visit then takes about a minute to wake it), and its disk is temporary, so heroes reset when it restarts. Use a paid plan with a persistent disk at `/data`, or a database adapter, to keep heroes permanently.
 
 ## Quick start

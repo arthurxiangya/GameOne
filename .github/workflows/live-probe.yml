@@ -2,7 +2,11 @@ name: Live probe
 
 # Measures a running server from outside: bots join, walk and watch each other, and the
 # results (latency, snapshot timing, prediction corrections, bandwidth, server tick stats)
-# are posted as annotations on the run. Start it from the Actions tab, or push a probe/* branch.
+# are posted as annotations on the run. Start it from the Actions tab after a deploy.
+#
+# It only runs when started by hand. GitHub attaches a run's result to the commit it ran on,
+# and Render deploys a commit only when all of its checks pass, so a probe that ran
+# automatically, and failed while waiting for a deploy, would block that same deploy.
 on:
   workflow_dispatch:
     inputs:
@@ -18,8 +22,6 @@ on:
       expect:
         description: Wait until /healthz contains this text (for example a deployed commit)
         default: '"protocol":2'
-  push:
-    branches: ['probe/**']
 
 jobs:
   probe:
@@ -36,24 +38,32 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - name: Wake the server and wait for the expected version
+        id: server
         run: |
           HEALTH="$(echo "$URL" | sed -e 's#^ws#http#' -e 's#/ws/*$#/healthz#')"
-          for i in $(seq 1 90); do
+          for i in $(seq 1 60); do
             BODY="$(curl -fsS -m 20 "$HEALTH" || true)"
-            if [ -n "$BODY" ] && echo "$BODY" | grep -qF -- "$EXPECT"; then echo "$BODY"; exit 0; fi
+            if [ -n "$BODY" ] && echo "$BODY" | grep -qF -- "$EXPECT"; then
+              echo "$BODY"
+              echo "ready=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             sleep 10
           done
-          echo "::error::$HEALTH did not report $EXPECT within 15 minutes (last: $BODY)"
-          exit 1
+          # Not a failure of this commit: the server simply isn't running the expected version yet.
+          echo "::warning title=Nothing measured::$HEALTH did not report $EXPECT within 10 minutes, so the live server is not running that version yet. Deploy it (Render: Manual Deploy > Deploy latest commit) and run this again. Last answer: ${BODY:-none}"
+          echo "ready=false" >> "$GITHUB_OUTPUT"
       - name: Probe
+        if: steps.server.outputs.ready == 'true'
         run: npx tsx packages/server/scripts/net-probe.ts "$URL" --bots "$BOTS" --seconds "$SECONDS_TO_RUN" --annotate
       - name: Two real browsers on the live site
+        if: steps.server.outputs.ready == 'true'
         run: |
           npx playwright install --with-deps chromium
           PAGE="$(echo "$URL" | sed -e 's#^ws#http#' -e 's#/ws/*$#/#')"
           node scripts/browser-smoke.mjs online "$PAGE"
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.server.outputs.ready == 'true'
         with:
           name: live-screenshots
           path: screenshots/
