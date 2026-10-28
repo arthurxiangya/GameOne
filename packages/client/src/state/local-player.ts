@@ -29,6 +29,9 @@ export class LocalPlayer {
   private seq = 0;
   /** Facing direction for rendering. */
   yaw = Math.PI;
+  /** Reconciliations that moved the hero noticeably (> 5 cm), and teleport-sized snaps. For diagnostics. */
+  corrections = 0;
+  snaps = 0;
 
   constructor(private world: VoxelWorld) {}
 
@@ -71,7 +74,10 @@ export class LocalPlayer {
     const dx = this.body.x - bx;
     const dy = this.body.y - by;
     const dz = this.body.z - bz;
-    if (Math.hypot(dx, dy, dz) > SNAP_DISTANCE) {
+    const moved = Math.hypot(dx, dy, dz);
+    if (moved > 0.05) this.corrections++;
+    if (moved > SNAP_DISTANCE) {
+      this.snaps++;
       copyBody(this.body, this.previous);
       this.correction.x = this.correction.y = this.correction.z = 0;
       return;

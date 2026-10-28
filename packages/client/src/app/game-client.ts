@@ -96,6 +96,8 @@ export class GameClient {
   private readonly fpsMeter = new FpsMeter();
   private readonly governor: PerformanceGovernor;
   private renderDelay = 0.1;
+  /** Longest frame since joining, in seconds: shows hitches such as shader compilation. */
+  private longestFrame = 0;
 
   private generated: GeneratedWorld | null = null;
   private local: LocalPlayer | null = null;
@@ -310,6 +312,7 @@ export class GameClient {
     this.dayLength = msg.dayLength;
     this.timeOfDay = msg.day;
     this.haveSnapshot = false;
+    this.longestFrame = 0;
     this.cooldowns = zeroCooldowns();
     this.views.addHero(msg.you, msg.look);
     if (this.generated && this.local) this.local.reset(this.generated.playerSpawn);
@@ -528,7 +531,10 @@ export class GameClient {
       this.title.setReady();
     }
 
-    if (this.phase === 'playing') this.updatePlaying(dt, elapsed);
+    if (this.phase === 'playing') {
+      this.longestFrame = Math.max(this.longestFrame, raw);
+      this.updatePlaying(dt, elapsed);
+    }
     else {
       this.cameraRig.orbit(dt);
       this.timeOfDay = (this.timeOfDay + dt / this.dayLength) % 1;
@@ -758,6 +764,9 @@ export class GameClient {
     fps: number;
     quality: number;
     renderDelayMs: number;
+    corrections: number;
+    snaps: number;
+    longestFrameMs: number;
   } {
     const stats = this.ctx.renderStats;
     const players: { name: string; x: number; z: number }[] = [];
@@ -776,6 +785,9 @@ export class GameClient {
       fps: Math.round(this.fpsMeter.fps),
       quality: this.governor.level,
       renderDelayMs: Math.round(this.renderDelay * 1000),
+      corrections: this.local?.corrections ?? 0,
+      snaps: this.local?.snaps ?? 0,
+      longestFrameMs: Math.round(this.longestFrame * 1000),
     };
   }
 }
