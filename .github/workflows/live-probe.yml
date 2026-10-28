@@ -1,0 +1,44 @@
+name: Live probe
+
+# Measures a running server from outside: bots join, walk and watch each other, and the
+# results (latency, snapshot timing, prediction corrections, bandwidth, server tick stats)
+# are posted as annotations on the run. Start it from the Actions tab, or push a probe/* branch.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: WebSocket URL of the server
+        default: wss://lanternwood-realms.onrender.com/ws
+      bots:
+        description: Number of bots
+        default: '2'
+      seconds:
+        description: Seconds to measure
+        default: '30'
+  push:
+    branches: ['probe/**']
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      URL: ${{ inputs.url || 'wss://lanternwood-realms.onrender.com/ws' }}
+      BOTS: ${{ inputs.bots || '2' }}
+      SECONDS_TO_RUN: ${{ inputs.seconds || '30' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Wake the server (free instances sleep when idle)
+        run: |
+          HEALTH="$(echo "$URL" | sed -e 's#^ws#http#' -e 's#/ws/*$#/healthz#')"
+          for i in $(seq 1 36); do
+            if curl -fsS -m 20 "$HEALTH"; then echo; exit 0; fi
+            sleep 5
+          done
+          echo "::error::$HEALTH did not answer within 3 minutes"
+          exit 1
+      - name: Probe
+        run: npx tsx packages/server/scripts/net-probe.ts "$URL" --bots "$BOTS" --seconds "$SECONDS_TO_RUN" --annotate
