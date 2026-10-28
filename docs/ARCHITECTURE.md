@@ -256,4 +256,4 @@ The current design targets one process with up to a few hundred players. The por
 
 ## 14. Deployment
 
-`render.yaml` describes the online server as a Render web service built from the Dockerfile, with `/healthz` as its health check and redeploys after CI passes on `main`. The Dockerfile works on any container host; set `PORT`, and mount a persistent volume at `/data` to keep heroes across restarts.
+`render.yaml` describes the online server as a Render web service built from the Dockerfile, with `/healthz` as its health check. The **Deploy** workflow ships each push to `main` that passes CI: it triggers a Render deploy hook for that exact commit, waits until `/healthz` reports the commit, and then runs the live probe against it (ADR 0008). The Dockerfile works on any container host; set `PORT`, and mount a persistent volume at `/data` to keep heroes across restarts.

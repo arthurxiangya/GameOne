@@ -2,11 +2,12 @@ name: Live probe
 
 # Measures a running server from outside: bots join, walk and watch each other, and the
 # results (latency, snapshot timing, prediction corrections, bandwidth, server tick stats)
-# are posted as annotations on the run. Start it from the Actions tab after a deploy.
+# are posted as annotations on the run. Start it from the Actions tab after a deploy; the
+# Deploy workflow also calls it once Render reports the newly deployed commit.
 #
-# It only runs when started by hand. GitHub attaches a run's result to the commit it ran on,
-# and Render deploys a commit only when all of its checks pass, so a probe that ran
-# automatically, and failed while waiting for a deploy, would block that same deploy.
+# It never runs on its own on a push. GitHub attaches a run's result to the commit it ran on,
+# and Render's auto-deploy waits for all of a commit's checks, so a probe that waited for a
+# deploy of that same commit could block it.
 on:
   workflow_dispatch:
     inputs:
@@ -22,6 +23,24 @@ on:
       expect:
         description: Wait until /healthz contains this text (for example a deployed commit)
         default: '"protocol":2'
+  workflow_call:
+    inputs:
+      url:
+        type: string
+        default: wss://lanternwood-realms.onrender.com/ws
+      bots:
+        type: string
+        default: '2'
+      seconds:
+        type: string
+        default: '30'
+      expect:
+        type: string
+        default: '"protocol":2'
+      required:
+        description: Fail, rather than warn, if the server never reports `expect`
+        type: boolean
+        default: false
 
 jobs:
   probe:
@@ -31,6 +50,7 @@ jobs:
       BOTS: ${{ inputs.bots || '2' }}
       SECONDS_TO_RUN: ${{ inputs.seconds || '30' }}
       EXPECT: ${{ inputs.expect || '"protocol":2' }}
+      REQUIRED: ${{ inputs.required && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -41,7 +61,7 @@ jobs:
         id: server
         run: |
           HEALTH="$(echo "$URL" | sed -e 's#^ws#http#' -e 's#/ws/*$#/healthz#')"
-          for i in $(seq 1 60); do
+          for i in $(seq 1 120); do
             BODY="$(curl -fsS -m 20 "$HEALTH" || true)"
             if [ -n "$BODY" ] && echo "$BODY" | grep -qF -- "$EXPECT"; then
               echo "$BODY"
@@ -50,8 +70,13 @@ jobs:
             fi
             sleep 10
           done
-          # Not a failure of this commit: the server simply isn't running the expected version yet.
-          echo "::warning title=Nothing measured::$HEALTH did not report $EXPECT within 10 minutes, so the live server is not running that version yet. Deploy it (Render: Manual Deploy > Deploy latest commit) and run this again. Last answer: ${BODY:-none}"
+          if [ "$REQUIRED" = true ]; then
+            # Called after a deploy: the deploy never went live, which is a real failure.
+            echo "::error title=Deploy did not go live::$HEALTH did not report $EXPECT within 20 minutes. Check the deploy log in Render. Last answer: ${BODY:-none}"
+            exit 1
+          fi
+          # Started by hand before a deploy: not a failure, the server just isn't running that version yet.
+          echo "::warning title=Nothing measured::$HEALTH did not report $EXPECT within 20 minutes, so the live server is not running that version yet. Deploy it (Render: Manual Deploy > Deploy latest commit) and run this again. Last answer: ${BODY:-none}"
           echo "ready=false" >> "$GITHUB_OUTPUT"
       - name: Probe
         if: steps.server.outputs.ready == 'true'

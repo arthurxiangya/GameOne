@@ -13,9 +13,16 @@ A voxel MMORPG for the browser. An authoritative Node.js game server simulates a
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/arthurxiangya/GameOne)
 
-The button creates a free Render web service from [render.yaml](render.yaml), building the Dockerfile. When the deploy finishes, open the service's `onrender.com` address on any device; everyone who opens it plays in the same realm. After that, every push to `main` redeploys once CI passes.
+The button creates a free Render web service from [render.yaml](render.yaml), building the Dockerfile. When the deploy finishes, open the service's `onrender.com` address on any device; everyone who opens it plays in the same realm.
 
-Render deploys a new commit on `main` once all of that commit's GitHub checks pass (`autoDeployTrigger: checksPass`). `/healthz` shows the protocol version and, on Render, the deployed commit, so you can confirm what's live. If a deploy doesn't start, for example because Render isn't connected to your GitHub account or a check failed, use **Manual Deploy → Deploy latest commit** on the service page.
+### Shipping new commits
+
+A service created from the public repository URL is not redeployed by Render when `main` changes. There are two ways to ship:
+
+- **Automatically (one-time setup).** In Render, open the service, then **Settings → Deploy Hook**, and copy the URL. In GitHub, open the repository's **Settings → Secrets and variables → Actions → New repository secret**, name it `RENDER_DEPLOY_HOOK_URL` and paste the URL. From then on, the **Deploy** workflow deploys each push to `main` that passes CI, waits until the live `/healthz` reports that commit, then runs the live probe (bots plus two real browsers) against it.
+- **By hand.** In Render, open the service and choose **Manual Deploy → Deploy latest commit**.
+
+`/healthz` shows the protocol version and, on Render, the deployed commit, so you can confirm what's live.
 
 On the free plan the service sleeps after 15 idle minutes (the first visit then takes about a minute to wake it), and its disk is temporary, so heroes reset when it restarts. Use a paid plan with a persistent disk at `/data`, or a database adapter, to keep heroes permanently.
 
