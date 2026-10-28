@@ -330,7 +330,9 @@ export class GameClient {
   private onSnapshot(msg: SnapshotMessage): void {
     const local = this.local;
     if (!local) return;
-    this.clock.observe(msg.st, this.now);
+    // Stamp with when the message is handled, not the start of the current frame: at low frame
+    // rates that would make every snapshot look up to a frame late.
+    this.clock.observe(msg.st, performance.now() / 1000);
     this.timeOfDay = msg.day;
     this.self = msg.you;
     this.cooldowns = { ...msg.you.cd };

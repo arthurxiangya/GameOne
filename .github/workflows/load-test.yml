@@ -35,7 +35,9 @@ jobs:
             PORT=8080 HOST=127.0.0.1 DATA_DIR="$RUNNER_TEMP/data-$n" LOG_LEVEL=warn MAX_PLAYERS=5000 \
               node packages/server/dist/main.js > "server-$n.log" 2>&1 &
             SERVER=$!
-            for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/healthz > /dev/null && break; sleep 1; done
+            up=0
+            for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/healthz > /dev/null && { up=1; break; }; sleep 1; done
+            if [ "$up" != 1 ]; then echo "::error title=server did not start::$(tail -c 900 "server-$n.log" | tr '\n' ' ')"; exit 1; fi
             # Spread the bots over several processes so the bots, not the server, never become the bottleneck.
             per=$(( (n + 2) / 3 ))
             probes=""
