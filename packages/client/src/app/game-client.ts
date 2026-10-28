@@ -494,7 +494,12 @@ export class GameClient {
 
   private readonly frame = (ts: number): void => {
     requestAnimationFrame(this.frame);
-    const dt = Math.min(0.05, Math.max(0, (ts - this.lastFrame) / 1000));
+    const raw = Math.max(0, (ts - this.lastFrame) / 1000);
+    // Game time follows the real clock even at low frame rates (up to a quarter second per
+    // frame), so a slow device plays at normal speed instead of in slow motion. Animations
+    // use a tighter cap so one long hitch never makes models jump.
+    const elapsed = Math.min(MAX_STEPS_PER_FRAME * SIM_DT, raw);
+    const dt = Math.min(0.05, raw);
     this.lastFrame = ts;
     this.now = ts / 1000;
     this.frameCount++;
@@ -508,7 +513,7 @@ export class GameClient {
       this.title.setReady();
     }
 
-    if (this.phase === 'playing') this.updatePlaying(dt);
+    if (this.phase === 'playing') this.updatePlaying(dt, elapsed);
     else {
       this.cameraRig.orbit(dt);
       this.timeOfDay = (this.timeOfDay + dt / this.dayLength) % 1;
@@ -522,17 +527,18 @@ export class GameClient {
     this.ctx.render();
   };
 
-  private updatePlaying(dt: number): void {
+  /** `dt` drives animation; `elapsed` is real time for prediction, cooldowns and the clock. */
+  private updatePlaying(dt: number, elapsed: number): void {
     const local = this.local;
     const world = this.generated?.world;
     if (!local || !world) return;
-    this.timeOfDay = (this.timeOfDay + dt / this.dayLength) % 1;
-    for (const id of SKILL_IDS) this.cooldowns[id] = Math.max(0, this.cooldowns[id] - dt);
+    this.timeOfDay = (this.timeOfDay + elapsed / this.dayLength) % 1;
+    for (const id of SKILL_IDS) this.cooldowns[id] = Math.max(0, this.cooldowns[id] - elapsed);
 
     // Fixed-step prediction: every step is sent to the server with a sequence number.
     if (this.haveSnapshot) {
       const intent = this.readIntent();
-      this.accumulator += dt;
+      this.accumulator += elapsed;
       const frames: InputFrame[] = [];
       while (this.accumulator >= SIM_DT && frames.length < MAX_STEPS_PER_FRAME) {
         frames.push(local.step({ ...intent, jump: this.jumpQueued && !this.self?.dead }));
