@@ -51,8 +51,14 @@ describe('conversations', () => {
   });
 
   it('lets a character with nothing to say just chat', () => {
-    const p = hero(2, (x) => (x.story.main = { step: 6, progress: 0, state: 'active' }));
-    assert.deepEqual(npcTopics(npc('ilka'), p, 0).map((t) => t.key), ['idle']);
+    const p = hero(9, (x) => (x.story.bell = { step: 5, progress: 0, state: 'active' }));
+    assert.deepEqual(npcTopics(npc('tamsin'), p, 0).map((t) => t.key), ['idle']);
+  });
+
+  it('lets Seer Ilka open a rift from level 6', () => {
+    const rift = (level: number) => npcTopics(npc('ilka'), hero(level), 0).find((t) => t.key === 'rift')!;
+    assert.equal(rift(5).actions[0]?.disabled, true);
+    assert.deepEqual(rift(6).actions[0]?.send, { action: 'rift', arg: null });
   });
 });
 

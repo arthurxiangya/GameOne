@@ -79,6 +79,10 @@ export class StoryService {
         if (o.kind === 'event' && (o.event === 'siege' || (o.event === 'gloomKnight' && a.won))) this.objectiveMet(player, chain);
         continue;
       }
+      if (a.kind === 'rift') {
+        if (o.kind === 'event' && o.event === 'rift3' && a.wave >= 3) this.objectiveMet(player, chain);
+        continue;
+      }
       if (a.kind === 'visit') {
         if (o.kind === 'visit' && o.place === a.place) this.objectiveMet(player, chain);
         continue;

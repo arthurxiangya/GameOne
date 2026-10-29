@@ -53,6 +53,7 @@ import { StoryService } from '../domain/services/story-service';
 import type { LeaderboardSink } from './leaderboards';
 import { EmberRun } from './modes/ember-run';
 import { LanternNight } from './modes/lantern-night';
+import { RiftTrials } from './modes/rift-trials';
 import type { GameMode, ModeHost } from './modes/game-mode';
 import { SpatialHash } from './spatial-hash';
 
@@ -111,6 +112,7 @@ const TRANSIENT_CORPSE_SECONDS = 1.6;
 export class GameWorld implements CombatWorld, AiWorld {
   readonly emberRun: EmberRun;
   readonly lanternNight: LanternNight;
+  readonly riftTrials: RiftTrials;
   readonly raceCourse: GeneratedWorld['raceCourse'];
   readonly voxels: VoxelWorld;
   readonly seed: number;
@@ -168,7 +170,9 @@ export class GameWorld implements CombatWorld, AiWorld {
       now: () => this.simTime,
       timeOfDay: () => this.dayTime,
       players: () => this.playersById.values(),
+      busy: (player) => this.modes.some((mode) => mode.status(player) !== null),
       teleport: (player, to) => this.teleport(player, to),
+      sendHome: (player) => this.teleport(player, this.spawnPoint),
       modeChanged: (player) => void (player.modeDirty = true),
       spawnMonster: (type, level, x, z, monsterOptions) => this.spawnMonster(type, level, x, z, monsterOptions),
       removeMonster: (m) => void this.monstersById.delete(m.id),
@@ -177,7 +181,8 @@ export class GameWorld implements CombatWorld, AiWorld {
     this.raceCourse = generated.raceCourse;
     this.emberRun = new EmberRun(host, generated.raceCourse);
     this.lanternNight = new LanternNight(host, generated.siegeGates);
-    this.modes = [this.emberRun, this.lanternNight];
+    this.riftTrials = new RiftTrials(host, generated.riftArenas);
+    this.modes = [this.emberRun, this.lanternNight, this.riftTrials];
     this.combat = new CombatService(this, rng, this.clock, this.events, progression, this.tracker);
     this.ai = new MonsterAi(this, this.combat, this.events, rng);
 
@@ -528,6 +533,8 @@ export class GameWorld implements CombatWorld, AiWorld {
         return this.shop.buy(player, arg as ShopItemId);
       case 'race':
         return this.emberRun.start(player);
+      case 'rift':
+        return this.riftTrials.open(player);
     }
   }
 

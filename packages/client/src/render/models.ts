@@ -261,6 +261,7 @@ const MONSTER_BUILDERS: Readonly<Record<MonsterType, () => ModelRig>> = {
     part(armR, 0.1, 0.1, 1.3, 0x9a6cff, 0, -0.78, 0.6, true);
     return { root, body, legs: [legL, legR], arms: [armL, armR], armR: null, armL: null, lamp: null, hop: false, splay: false, height: MONSTERS.gloomknight.height };
   },
+  riftlord: () => golem({ body: 0x4b2f6e, head: 0x5c3a86, arm: 0x3f2760, leg: 0x2f1d48, eye: 0xd9c2ff }, true),
 };
 
 export const buildMonster = (type: MonsterType): ModelRig => MONSTER_BUILDERS[type]();

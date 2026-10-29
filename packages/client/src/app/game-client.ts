@@ -6,6 +6,7 @@ import {
   NPC_INTERACT_RANGE,
   PHYSICS,
   PROTOCOL_VERSION,
+  RIFT,
   SIM_DT,
   SKILLS,
   SKILL_IDS,
@@ -844,6 +845,11 @@ export class GameClient {
     return coursePoints(this.generated.raceCourse)[mode.next] ?? null;
   }
 
+  /** The stone circle, while the hero's own rift is gathering. */
+  private riftCirclePoint(): Vec3 | null {
+    return this.mode?.kind === 'rift' && this.mode.phase === 'gathering' ? { x: RIFT.circle.x, y: 12, z: RIFT.circle.z } : null;
+  }
+
   /** The fountain, while a siege is on and the hero is too far away to help. */
   private siegeRallyPoint(): Vec3 | null {
     const phase = this.siege?.phase;
@@ -852,7 +858,7 @@ export class GameClient {
   }
 
   private updateMode(dt: number): void {
-    const target = this.nextRacePoint() ?? (this.mode ? null : this.siegeRallyPoint());
+    const target = this.nextRacePoint() ?? this.riftCirclePoint() ?? (this.mode ? null : this.siegeRallyPoint());
     let bearing: number | null = null;
     if (target) {
       const yaw = this.cameraRig.yaw;
@@ -901,7 +907,7 @@ export class GameClient {
   }
 
   private computeQuestMark(): { x: number; z: number } | null {
-    const racing = this.nextRacePoint() ?? this.siegeRallyPoint();
+    const racing = this.nextRacePoint() ?? this.riftCirclePoint() ?? this.siegeRallyPoint();
     if (racing) return racing;
     const p = this.progress;
     if (!p || !this.generated) return null;

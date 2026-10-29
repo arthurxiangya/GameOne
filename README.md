@@ -7,6 +7,7 @@ A voxel MMORPG for the browser. An authoritative Node.js game server simulates a
 - **Stories.** Four story chains told by seven characters: the main quest to the Warden of the Frost Heart, plus The Drowned Bell, The Lantern Thief and Glass of the Rift, with objectives to defeat, collect, find and talk. Stories are data (`shared/src/game/story.ts`), run by one engine on the server.
 - **Daily bounties.** Captain Rook posts three new bounties every day at midnight UTC, the same for everyone, paying gold, XP and Ember Marks.
 - **Lantern Night.** Every third night the Night Bell rings and the Gloom marches on Emberhold in five waves, ending with the Gloom Knight. Everyone online defends the Great Lantern together; winners earn Ember Marks, a XP blessing and, after five wins, the Gloom Steed.
+- **Rift Trials.** Up to four heroes step into Seer Ilka's stone circle and are taken to a floating rift island: five waves, then the Rift Lord, against the clock, scored on a leaderboard. Rift monsters fight only their own party.
 - **Ember Run.** A time trial through eight checkpoints in every land and back, on foot, judged by the server, with medals and a leaderboard (L).
 - **Mounts and pets.** Five mounts (R to ride, up to 80% faster on land) and seven pets that hatch from eggs, level up with you and each give a small bonus (P for the stable).
 - **RPG systems.** Four skills, tonics, critical hits, experience and levels up to 20, gold, weapon upgrades, Ember Marks and titles, and a journal (J) that tracks it all.

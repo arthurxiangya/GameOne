@@ -39,9 +39,13 @@ export interface HeroRecords {
   raceDay: number;
   /** Lantern Nights won. */
   nightsWon: number;
+  /** Best Rift Trial score. */
+  riftBest: number;
+  /** Day of the last Rift Lord bonus Mark. */
+  riftLordDay: number;
 }
 
-export const newRecords = (): HeroRecords => ({ raceBest: null, raceDay: -1, nightsWon: 0 });
+export const newRecords = (): HeroRecords => ({ raceBest: null, raceDay: -1, nightsWon: 0, riftBest: 0, riftLordDay: -1 });
 
 export const newProgress = (name: string): PlayerProgress => ({
   name,

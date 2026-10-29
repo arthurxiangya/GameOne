@@ -25,7 +25,7 @@ export type Objective =
   | { readonly kind: 'event'; readonly event: StoryEvent; readonly text: string };
 
 /** Mode outcomes that story steps can wait for. */
-export type StoryEvent = 'siege' | 'gloomKnight';
+export type StoryEvent = 'siege' | 'gloomKnight' | 'rift3';
 
 export interface StepReward {
   readonly xp: number;
@@ -250,6 +250,13 @@ const RIFT: StoryChain = {
       offer: 'Sefa will want to hear this.',
       remind: 'Tell Sefa on the Amber Dunes road what Ilka said.',
       done: 'Doors in the sky? Hah. Then my caravans will need someone who has walked through one. Glasswalker, they will call you.',
+    },
+    {
+      title: 'Into the Rift', objective: { kind: 'event', event: 'rift3', text: 'Reach wave 3 of a Rift Trial' }, accept: false, turnIn: 'sefa',
+      where: 'Emberhold · Seer Ilka’s stone circle', reward: { xp: 500, gold: 90, marks: 3 },
+      offer: 'Ilka’s door is open now. Go through, see how far you get, and come back to tell me.',
+      remind: 'Ask Seer Ilka to open a rift (level 6 and up, up to four heroes), and survive to wave 3.',
+      done: 'Islands of glass and monsters made of old fears? And you came back. The caravans will sing about this one.',
     },
   ],
 };

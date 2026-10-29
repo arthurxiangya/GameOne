@@ -1,6 +1,7 @@
 import type { MonsterType } from '../game/monsters';
 import { NPC_PLACEMENTS, type NpcDef } from '../game/npcs';
 import type { RaceCourse } from '../game/race';
+import { RIFT, RIFT_ARENAS } from '../game/rift';
 import { ValueNoise } from '../math/noise';
 import { Mulberry32, type RandomSource } from '../math/random';
 import { clamp, lerp, smoothstep } from '../math/scalar';
@@ -40,6 +41,8 @@ export interface GeneratedWorld {
   readonly raceCourse: RaceCourse;
   /** Where the Gloom enters on Lantern Night: the four roads, north, east, south and west. */
   readonly siegeGates: readonly Vec3[];
+  /** The floating rift islands for Rift Trials; `y` is the floor heroes stand on. */
+  readonly riftArenas: readonly Vec3[];
 }
 
 interface House {
@@ -81,6 +84,8 @@ export function generateWorld(seed: number): GeneratedWorld {
     const spot = nearest(world, nx, nz, 8, (x, z) => isStandable(world, x, z)) ?? { x: nx, z: nz };
     return { x: spot.x, y: world.surfaceY(spot.x, spot.z), z: spot.z };
   });
+  const riftArenas = RIFT_ARENAS.map((c) => buildRiftArena(world, c.x, c.z));
+  buildRiftCircle(world);
   world.computeColumnExtents();
 
   return {
@@ -94,6 +99,7 @@ export function generateWorld(seed: number): GeneratedWorld {
     npcs,
     raceCourse,
     siegeGates,
+    riftArenas,
   };
 }
 
@@ -589,4 +595,49 @@ function placeRaceCourse(world: VoxelWorld): RaceCourse {
     return at(spot.x, spot.z);
   });
   return { start: at(0, 13), checkpoints };
+}
+
+/**
+ * A round floating island of dark stone past a corner of the realm, walled so a careless step
+ * does not end a run, with four glowing pillars. Its columns get terrain heights like the
+ * island's, so monsters and the minimap treat it as ground.
+ */
+function buildRiftArena(world: VoxelWorld, cx: number, cz: number): Vec3 {
+  const r = RIFT.arenaRadius;
+  const floor = RIFT.arenaFloor;
+  for (let dx = -r - 1; dx <= r + 1; dx++) {
+    for (let dz = -r - 1; dz <= r + 1; dz++) {
+      const x = cx + dx;
+      const z = cz + dz;
+      const d = Math.hypot(dx, dz);
+      if (!world.inXZ(x, z) || d > r + 0.5) continue;
+      const i = world.column(x, z);
+      const depth = Math.max(1, Math.round((r + 0.5 - d) * 1.3));
+      for (let y = floor - depth; y <= floor; y++) world.set(x, y, z, y === floor ? (Math.round(d) % 3 === 0 ? Block.Stone : Block.DeepStone) : Block.Stone);
+      if (d > r - 0.5) world.set(x, floor + 1, z, Block.Cobble);
+      world.topY[i] = floor;
+      world.edgeDistance[i] = r - d;
+      world.biome[i] = Biome.Rift;
+    }
+  }
+  for (const [px, pz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const) {
+    const x = cx + Math.round(px * (r - 1.5) * 0.7071);
+    const z = cz + Math.round(pz * (r - 1.5) * 0.7071);
+    for (let y = floor + 1; y <= floor + 3; y++) world.set(x, y, z, Block.DeepStone);
+    world.set(x, floor + 4, z, Block.Window);
+  }
+  return { x: cx, y: floor + 0.5, z: cz };
+}
+
+/** Six glowing standing stones around the gathering circle beside Seer Ilka. */
+function buildRiftCircle(world: VoxelWorld): void {
+  const { x: cx, z: cz, radius } = RIFT.circle;
+  for (let k = 0; k < 6; k++) {
+    const a = (k * Math.PI) / 3;
+    const x = Math.round(cx + Math.cos(a) * (radius + 0.8));
+    const z = Math.round(cz + Math.sin(a) * (radius + 0.8));
+    const top = world.topY[world.column(x, z)]!;
+    world.set(x, top + 1, z, Block.Stone);
+    world.set(x, top + 2, z, Block.Window);
+  }
 }

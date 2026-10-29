@@ -42,6 +42,8 @@ export class Player {
   calling = 0;
   /** Simulation time until which the Lantern's Blessing adds kill XP. */
   blessedUntil = 0;
+  /** The rift party the hero fights with, or null. */
+  party: number | null = null;
 
   constructor(
     readonly id: number,

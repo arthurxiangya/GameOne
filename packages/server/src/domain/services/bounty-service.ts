@@ -6,6 +6,7 @@ import {
   bountyGold,
   bountyXp,
   killCounts,
+  riftCounts,
   runCounts,
   siegeCounts,
   type BountyDef,
@@ -45,10 +46,14 @@ export class BountyService {
     const b = player.progress.bounties;
     const defs = b.ids.map(bountyFromId);
     const before = defs.map((def, i) => (def ? bountyCount(def, b.counts[i] ?? 0, b.seen) : 0));
-    if (a.kind === 'kill' || a.kind === 'race' || a.kind === 'siege') {
+    if (a.kind === 'kill' || a.kind === 'race' || a.kind === 'siege' || a.kind === 'rift') {
       defs.forEach((def, i) => {
         if (!def || b.done[i]) return;
-        const counts = a.kind === 'kill' ? killCounts(def.kind, a.level, player.level) : a.kind === 'race' ? runCounts(def.kind) : siegeCounts(def.kind);
+        const counts =
+          a.kind === 'kill' ? killCounts(def.kind, a.level, player.level)
+          : a.kind === 'race' ? runCounts(def.kind)
+          : a.kind === 'siege' ? siegeCounts(def.kind)
+          : riftCounts(def.kind, a.wave);
         if (!counts) return;
         b.counts[i] = (b.counts[i] ?? 0) + 1;
         player.touchProgress();

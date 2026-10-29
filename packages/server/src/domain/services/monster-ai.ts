@@ -1,5 +1,5 @@
 import { NO_GROUND, SLAM, damp, lerpAngle, outlevelledDamageMultiplier, type RandomSource } from '@lanternwood/shared';
-import type { Monster } from '../entities/monster';
+import { sameFight, type Monster } from '../entities/monster';
 import type { Player } from '../entities/player';
 import type { EventSink } from '../events';
 import type { CombatService } from './combat-service';
@@ -68,7 +68,7 @@ export class MonsterAi {
   private updateMarcher(m: Monster, goal: { readonly x: number; readonly z: number }, dt: number): void {
     let target = m.goalOnly ? null : this.selectTarget(m);
     // Marchers give up on heroes who lead them far away, and go back to the goal.
-    if (target && Math.hypot(target.body.x - m.x, target.body.z - m.z) > m.def.aggroRange * 2) {
+    if (target && Math.hypot(target.body.x - m.x, target.body.z - m.z) > m.aggroRange * 2) {
       m.threat.delete(target.id);
       target = null;
     }
@@ -107,11 +107,12 @@ export class MonsterAi {
   }
 
   private selectTarget(m: Monster): Player | null {
-    if (m.mode === 'idle' && !m.def.passive) {
+    if (m.mode === 'idle' && !m.passive) {
       let nearest: Player | null = null;
       let nearestDistance = Number.POSITIVE_INFINITY;
-      for (const p of this.world.playersNear(m.x, m.z, m.def.aggroRange)) {
-        if (p.dead || Math.abs(p.body.y - m.y) > 5 || p.level >= m.level + IGNORE_LEVEL_GAP || this.world.ignoredByMonsters(p)) continue;
+      for (const p of this.world.playersNear(m.x, m.z, m.aggroRange)) {
+        if (p.dead || Math.abs(p.body.y - m.y) > 5 || !sameFight(m, p.party) || this.world.ignoredByMonsters(p)) continue;
+        if (m.party === null && p.level >= m.level + IGNORE_LEVEL_GAP) continue;
         const d = Math.hypot(p.body.x - m.x, p.body.z - m.z);
         if (d < nearestDistance) {
           nearestDistance = d;
@@ -226,7 +227,7 @@ export class MonsterAi {
     m.slam = null;
     this.events.area(x, z, { e: 'slam', x, y, z, r: SLAM.radius });
     for (const p of this.world.playersNear(x, z, SLAM.radius)) {
-      if (!p.dead && Math.abs(p.body.y - y) < 4) this.combat.damagePlayer(p, m.slamDamage + this.rng.next() * 12, m, 'slam');
+      if (!p.dead && Math.abs(p.body.y - y) < 4 && sameFight(m, p.party)) this.combat.damagePlayer(p, m.slamDamage + this.rng.next() * 12, m, 'slam');
     }
   }
 }

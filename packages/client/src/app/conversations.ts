@@ -1,6 +1,7 @@
 import {
   CHAINS,
   MAX_EGGS,
+  RIFT,
   MAX_WEAPON_TIER,
   SHOP_ITEMS,
   SHOP_ITEM_IDS,
@@ -180,6 +181,20 @@ function raceTopic(p: PlayerProgress, medals: Readonly<Record<Medal, number>> | 
   };
 }
 
+function riftTopic(p: PlayerProgress): Topic {
+  const ready = p.level >= RIFT.minLevel;
+  return {
+    key: 'rift', label: 'Open a rift', mark: '', title: 'Rift Trials',
+    paragraphs: [
+      ready
+        ? `I can hold a door open to the rift islands. Everyone standing in the stone circle when it opens goes through with you, up to ${RIFT.maxParty}. Five waves, then the Rift Lord, against the clock.`
+        : `The rift would tear you apart. Come back at level ${RIFT.minLevel}.`,
+      { dim: `Score: ${RIFT.pointsPerWave} per wave cleared, plus time left after the Rift Lord falls, minus ${RIFT.knockoutPenalty} for each hero knocked out. Your best: ${p.records.riftBest.toLocaleString('en-US')}. Leaderboards: press L.` },
+    ],
+    actions: [{ label: 'Open a rift', primary: true, disabled: !ready, send: { action: 'rift', arg: null } }, { label: 'Not now' }],
+  };
+}
+
 /** Today's board as lines of text, shared by Captain Rook and the journal. */
 export function bountyLines(p: PlayerProgress): { title: string; text: string; status: string; done: boolean }[] {
   const b = p.bounties;
@@ -222,6 +237,7 @@ export function npcTopics(npc: NpcDef, p: PlayerProgress, nowMs: number, ctx: To
   story.sort((a, b) => rank(a) - rank(b));
   const topics = [...story];
   if (npc.services.includes('race')) topics.push(raceTopic(p, ctx.medals));
+  if (npc.services.includes('rift')) topics.push(riftTopic(p));
   if (npc.services.includes('bounties')) topics.push(bountyTopic(p, nowMs));
   if (npc.services.includes('forge')) topics.push(forgeTopic(p));
   if (npc.services.includes('marks')) topics.push(marksTopic(p));

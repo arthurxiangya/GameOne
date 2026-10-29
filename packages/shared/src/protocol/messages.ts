@@ -130,16 +130,34 @@ export interface SelfState {
 export type LogClass = 'sys' | 'foe' | 'loot' | 'good';
 
 /** What a hero is doing in a game mode, for their HUD. Times are server simulation time. */
-export type ModeState = {
-  readonly kind: 'race';
-  readonly phase: 'countdown' | 'running';
-  /** When the clock starts (or started). */
-  readonly startsAt: number;
-  /** Index into the course points of the next point to reach (1 = first checkpoint). */
-  readonly next: number;
-  /** Number of checkpoints, not counting the finish. */
-  readonly total: number;
-};
+export type ModeState =
+  | {
+      readonly kind: 'race';
+      readonly phase: 'countdown' | 'running';
+      /** When the clock starts (or started). */
+      readonly startsAt: number;
+      /** Index into the course points of the next point to reach (1 = first checkpoint). */
+      readonly next: number;
+      /** Number of checkpoints, not counting the finish. */
+      readonly total: number;
+    }
+  | {
+      readonly kind: 'rift';
+      readonly phase: RiftPhase;
+      /** 1-based wave (0 before the first). */
+      readonly wave: number;
+      readonly waves: number;
+      /** When the current phase ends (gathering, starting, break, done), or 0. */
+      readonly endsAt: number;
+      /** When the run runs out of time, or 0 while gathering. */
+      readonly deadline: number;
+      readonly remaining: number;
+      readonly party: readonly string[];
+      /** Final score once the run is over. */
+      readonly score: number;
+    };
+
+export type RiftPhase = 'gathering' | 'starting' | 'wave' | 'break' | 'done' | 'failed';
 
 export type GameEvent =
   | { readonly e: 'dmg'; readonly id: number; readonly amt: number; readonly crit: boolean }
