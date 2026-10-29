@@ -49,7 +49,7 @@ export function bountyFromId(id: string): BountyDef | null {
     return { ...base, id, kind: 'defend', slot: 'mode', title: 'Defend', need: 1, text: 'Take part in a Lantern Night (the Night Bell rings at dusk, every third night)' };
   }
   if (id === 'spar') {
-    return { ...base, id, kind: 'spar', slot: 'mode', title: 'Spar', need: 1, text: 'Fight a duel, win or lose (select a hero, then Duel)' };
+    return { ...base, id, kind: 'spar', slot: 'mode', title: 'Spar', need: 1, text: 'Fight a duel, win or lose (select another hero and challenge them)' };
   }
   if (id === 'delve') {
     return { ...base, id, kind: 'delve', slot: 'mode', title: 'Delve', need: 1, text: 'Reach wave 3 in a Rift Trial (Seer Ilka, level 6 and up)' };
