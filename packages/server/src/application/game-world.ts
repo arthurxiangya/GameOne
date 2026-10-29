@@ -51,6 +51,7 @@ import { ProgressionService } from '../domain/services/progression-service';
 import { ShopService } from '../domain/services/shop-service';
 import { StoryService } from '../domain/services/story-service';
 import type { LeaderboardSink } from './leaderboards';
+import { Duels } from './modes/duels';
 import { EmberRun } from './modes/ember-run';
 import { LanternNight } from './modes/lantern-night';
 import { RiftTrials } from './modes/rift-trials';
@@ -66,6 +67,8 @@ export type PlayerCommand =
   | { readonly kind: 'choosePet'; readonly pet: PetId | null }
   | { readonly kind: 'renamePet'; readonly pet: PetId; readonly name: string }
   | { readonly kind: 'quit' }
+  | { readonly kind: 'duel'; readonly action: 'challenge'; readonly target: number }
+  | { readonly kind: 'duel'; readonly action: 'accept' | 'decline' }
   | { readonly kind: 'respawn' };
 
 export interface GameWorldOptions {
@@ -77,6 +80,8 @@ export interface GameWorldOptions {
   readonly calendar?: Calendar;
   /** Where modes post results. Defaults to nowhere. */
   readonly boards?: LeaderboardSink;
+  /** Whether heroes can duel (online). Single-player has nobody to duel. Defaults to true. */
+  readonly duels?: boolean;
 }
 
 const systemCalendar: Calendar = { today: () => dayNumber(Date.now()), iso: () => new Date().toISOString() };
@@ -113,6 +118,7 @@ export class GameWorld implements CombatWorld, AiWorld {
   readonly emberRun: EmberRun;
   readonly lanternNight: LanternNight;
   readonly riftTrials: RiftTrials;
+  readonly duels: Duels;
   readonly raceCourse: GeneratedWorld['raceCourse'];
   readonly voxels: VoxelWorld;
   readonly seed: number;
@@ -154,7 +160,8 @@ export class GameWorld implements CombatWorld, AiWorld {
 
     const progression = new ProgressionService(this.events);
     this.story = new StoryService(this.events, progression, rng);
-    this.bounties = new BountyService(this.events, progression, (day) => bountiesForDay(generated.seed, day, { duels: false }));
+    const duels = options.duels ?? true;
+    this.bounties = new BountyService(this.events, progression, (day) => bountiesForDay(generated.seed, day, { duels }));
     this.pets = new PetService(this.events, rng);
     this.mounts = new MountService(this.events, this.clock);
     this.tracker = new ProgressTracker(this.story, this.bounties, this.pets, this.calendar);
@@ -182,7 +189,10 @@ export class GameWorld implements CombatWorld, AiWorld {
     this.emberRun = new EmberRun(host, generated.raceCourse);
     this.lanternNight = new LanternNight(host, generated.siegeGates);
     this.riftTrials = new RiftTrials(host, generated.riftArenas);
-    this.modes = [this.emberRun, this.lanternNight, this.riftTrials];
+    this.duels = new Duels(host, () =>
+      !duels ? 'There is nobody to duel here.' : this.lanternNight.active ? 'Not during Lantern Night: the Lantern needs every blade.' : null,
+    );
+    this.modes = [this.emberRun, this.lanternNight, this.riftTrials, this.duels];
     this.combat = new CombatService(this, rng, this.clock, this.events, progression, this.tracker);
     this.ai = new MonsterAi(this, this.combat, this.events, rng);
 
@@ -311,6 +321,11 @@ export class GameWorld implements CombatWorld, AiWorld {
       case 'quit':
         result = this.modes.some((mode) => mode.quit?.(player)) ? ok() : fail('There is nothing to give up.');
         break;
+      case 'duel':
+        result = command.action === 'challenge'
+          ? this.duels.challenge(player, this.playersById.get(command.target))
+          : this.duels.answer(player, command.action === 'accept');
+        break;
       case 'chooseMount':
         result = this.mounts.choose(player, command.mount);
         break;
@@ -370,6 +385,14 @@ export class GameWorld implements CombatWorld, AiWorld {
 
   ignoredByMonsters(player: Player): boolean {
     return this.modes.some((mode) => mode.ignoredByMonsters?.(player));
+  }
+
+  duelOpponent(player: Player): Player | null {
+    return this.duels.opponent(player);
+  }
+
+  duelDown(winner: Player, loser: Player): void {
+    this.duels.down(winner, loser);
   }
 
   monsterHit(monster: Monster, attacker: Player | null, amount: number, killed: boolean): void {

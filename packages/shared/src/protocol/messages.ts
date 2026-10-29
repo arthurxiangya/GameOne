@@ -43,6 +43,9 @@ export type ClientMessage =
   | { readonly t: 'quit' }
   /** Ask for the leaderboards. */
   | { readonly t: 'boards' }
+  /** Challenge another hero (by entity id) to a duel, or answer a challenge. */
+  | { readonly t: 'duel'; readonly action: 'challenge'; readonly target: number }
+  | { readonly t: 'duel'; readonly action: 'accept' | 'decline' }
   | { readonly t: 'chat'; readonly text: string }
   | { readonly t: 'respawn' }
   | { readonly t: 'ping'; readonly at: number };
@@ -155,9 +158,24 @@ export type ModeState =
       readonly party: readonly string[];
       /** Final score once the run is over. */
       readonly score: number;
-    };
+    }
+  | DuelState;
 
 export type RiftPhase = 'gathering' | 'starting' | 'wave' | 'break' | 'done' | 'failed';
+
+/** A duel as one of its heroes sees it. */
+export interface DuelState {
+  readonly kind: 'duel';
+  /** `invited`: someone challenged you. `challenging`: waiting for their answer. */
+  readonly phase: 'invited' | 'challenging' | 'countdown' | 'fight';
+  readonly opponent: string;
+  readonly opponentId: number;
+  /** When the current phase ends (server time). */
+  readonly endsAt: number;
+  readonly x: number;
+  readonly z: number;
+  readonly radius: number;
+}
 
 export type GameEvent =
   | { readonly e: 'dmg'; readonly id: number; readonly amt: number; readonly crit: boolean }

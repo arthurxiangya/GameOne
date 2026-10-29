@@ -134,6 +134,8 @@ function parseRecords(v: unknown): HeroRecords {
   if (intIn(v.nightsWon, 0, 1e6)) records.nightsWon = v.nightsWon;
   if (intIn(v.riftBest, 0, 1e7)) records.riftBest = v.riftBest;
   if (Number.isInteger(v.riftLordDay)) records.riftLordDay = v.riftLordDay as number;
+  for (const key of ['duelWins', 'duelLosses', 'duelDraws'] as const) if (intIn(v[key], 0, 1e7)) records[key] = v[key];
+  if (intIn(v.rating, 0, 10_000)) records.rating = v.rating;
   return records;
 }
 

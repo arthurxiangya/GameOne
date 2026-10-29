@@ -43,9 +43,16 @@ export interface HeroRecords {
   riftBest: number;
   /** Day of the last Rift Lord bonus Mark. */
   riftLordDay: number;
+  duelWins: number;
+  duelLosses: number;
+  duelDraws: number;
+  /** Duel rating (Elo), starting at 1,000. */
+  rating: number;
 }
 
-export const newRecords = (): HeroRecords => ({ raceBest: null, raceDay: -1, nightsWon: 0, riftBest: 0, riftLordDay: -1 });
+export const newRecords = (): HeroRecords => ({
+  raceBest: null, raceDay: -1, nightsWon: 0, riftBest: 0, riftLordDay: -1, duelWins: 0, duelLosses: 0, duelDraws: 0, rating: 1000,
+});
 
 export const newProgress = (name: string): PlayerProgress => ({
   name,

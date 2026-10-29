@@ -44,6 +44,8 @@ export class Player {
   blessedUntil = 0;
   /** The rift party the hero fights with, or null. */
   party: number | null = null;
+  /** In a duel, both heroes fight at the lower level: their health, mana and attack use this. */
+  duelLevel: number | null = null;
 
   constructor(
     readonly id: number,
@@ -66,16 +68,21 @@ export class Player {
     return this.progress.level;
   }
 
+  /** The level the hero's stats come from: their own, or a duel's matched level. */
+  get statLevel(): number {
+    return this.duelLevel ?? this.progress.level;
+  }
+
   get maxHp(): number {
-    return maxHpFor(this.progress.level);
+    return maxHpFor(this.statLevel);
   }
 
   get maxMp(): number {
-    return maxMpFor(this.progress.level);
+    return maxMpFor(this.statLevel);
   }
 
   get attack(): number {
-    return attackFor(this.progress.level, this.progress.weapon);
+    return attackFor(this.statLevel, this.progress.weapon);
   }
 
   touchProgress(): void {

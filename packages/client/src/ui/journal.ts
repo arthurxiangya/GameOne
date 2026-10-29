@@ -4,6 +4,7 @@ import {
   bountyGold,
   chainStatus,
   currentStep,
+  formatRaceTime,
   npcName,
   objectiveText,
   type ChainId,
@@ -84,7 +85,15 @@ export class JournalView {
     bounties.append(el('p', 'dim', `Each pays ${bountyGold(p.level)} gold, XP and an Ember Mark. New bounties in ${untilNewBounties(nowMs)}.`));
 
     const you = el('section', 'j-sec');
+    const r = p.records;
+    const records = [
+      r.raceBest !== null ? `Ember Run best ${formatRaceTime(r.raceBest)}` : '',
+      r.riftBest > 0 ? `Rift best ${r.riftBest.toLocaleString('en-US')}` : '',
+      r.nightsWon > 0 ? `Lantern Nights won ${r.nightsWon}` : '',
+      r.duelWins + r.duelLosses + r.duelDraws > 0 ? `Duels ${r.duelWins}–${r.duelLosses}–${r.duelDraws}, rating ${r.rating}` : '',
+    ].filter(Boolean);
     you.append(el('h3', undefined, `Ember Marks: ${p.marks}`));
+    if (records.length) you.append(el('p', 'dim', records.join(' · ')));
     you.append(el('p', 'dim', p.titles.length ? 'Choose the title shown under your name:' : 'Finish stories to earn titles. Smith Oda trades Ember Marks.'));
     if (p.titles.length) {
       const chips = el('div', 'chips');

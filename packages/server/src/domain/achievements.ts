@@ -1,4 +1,4 @@
-import type { LandmarkId, Medal, MonsterType, NpcId } from '@lanternwood/shared';
+import type { DuelResult, LandmarkId, Medal, MonsterType, NpcId } from '@lanternwood/shared';
 import type { Player } from './entities/player';
 
 /**
@@ -15,7 +15,9 @@ export type Achievement =
   /** Defended Emberhold through a Lantern Night; `won` once the Gloom Knight fell. */
   | { readonly kind: 'siege'; readonly won: boolean }
   /** A Rift Trial reached this wave with the hero in the party. */
-  | { readonly kind: 'rift'; readonly wave: number };
+  | { readonly kind: 'rift'; readonly wave: number }
+  /** Fought a duel to the end, whatever the result. */
+  | { readonly kind: 'duel'; readonly result: DuelResult };
 
 export interface AchievementSink {
   record(player: Player, achievement: Achievement): void;
