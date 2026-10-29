@@ -25,6 +25,8 @@ export interface CombatWorld {
   monster(id: number): Monster | undefined;
   player(id: number): Player | undefined;
   monstersNear(x: number, z: number, radius: number): readonly Monster[];
+  /** A reason a mode forbids this skill right now (no fighting during a run), or null. */
+  skillBlocked(player: Player, skill: SkillId): string | null;
 }
 
 interface PendingHit {
@@ -56,6 +58,8 @@ export class CombatService {
     if (player.level < def.unlockLevel) return fail(`${def.name} unlocks at level ${def.unlockLevel}.`);
     if (player.cooldowns[skill] > 0) return fail(`${def.name} is not ready yet.`);
     if (player.mp < def.mana) return fail('Not enough mana.');
+    const blocked = this.world.skillBlocked(player, skill);
+    if (blocked) return fail(blocked);
     player.dismount();
     switch (skill) {
       case 'strike':

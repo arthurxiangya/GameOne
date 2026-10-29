@@ -5,7 +5,7 @@ import type { GameWorld } from './application/game-world';
 import type { Logger, SystemTime } from './application/ports';
 import type { SessionService } from './application/session-service';
 import type { ServerConfig } from './config';
-import type { PlayerRepository } from './domain/ports';
+import type { LeaderboardRepository, PlayerRepository } from './domain/ports';
 import { createHttpServer } from './infrastructure/http/http-server';
 import { WebSocketGateway } from './infrastructure/network/websocket-gateway';
 import { createTokenHasher } from './infrastructure/security/token-hasher';
@@ -25,6 +25,7 @@ export interface GameServerDependencies {
   readonly logger: Logger;
   readonly time: SystemTime;
   readonly repository: PlayerRepository;
+  readonly boards?: LeaderboardRepository;
 }
 
 /**
@@ -32,10 +33,11 @@ export interface GameServerDependencies {
  * gateway and autosave. Kept separate from main.ts so integration tests can boot a real
  * server in-process.
  */
-export function createGameServer({ config, logger, time, repository }: GameServerDependencies): GameServer {
-  const { world, sessions, loop } = createSimulation({
+export function createGameServer({ config, logger, time, repository, boards }: GameServerDependencies): GameServer {
+  const { world, sessions, loop, leaderboards } = createSimulation({
     config,
     repository,
+    boards,
     logger,
     time,
     hashToken: createTokenHasher(config.tokenSalt),
@@ -85,6 +87,7 @@ export function createGameServer({ config, logger, time, repository }: GameServe
       if (autosave) clearInterval(autosave);
       loop.stop();
       await sessions.shutdown();
+      await leaderboards.flush();
       await gateway.close();
       await new Promise<void>((resolveClose) => http.close(() => resolveClose()));
     },

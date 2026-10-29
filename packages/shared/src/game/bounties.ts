@@ -10,7 +10,7 @@ import { MAX_LEVEL, xpToNext } from './stats';
  * only ever carry ids.
  */
 
-export type BountyKind = 'hunt' | 'bigGame' | 'scout' | 'courier';
+export type BountyKind = 'hunt' | 'bigGame' | 'scout' | 'courier' | 'run';
 export type BountySlot = 'fight' | 'explore' | 'mode';
 
 export interface BountyDef {
@@ -45,6 +45,9 @@ export function bountyFromId(id: string): BountyDef | null {
   if (id === 'bigGame') {
     return { ...base, id, kind: 'bigGame', slot: 'fight', title: 'Big game', need: 3, text: 'Defeat 3 monsters above your level' };
   }
+  if (id === 'run') {
+    return { ...base, id, kind: 'run', slot: 'explore', title: 'Run', need: 1, text: 'Finish an Ember Run (Pip the Runner, Emberhold)' };
+  }
   if (id === 'courier') {
     return { ...base, id, kind: 'courier', slot: 'explore', title: 'Courier', need: COURIER_NPCS.length, npcs: COURIER_NPCS, text: `Talk to ${list(COURIER_NPCS.map(npcName))}` };
   }
@@ -76,9 +79,14 @@ export function bountiesForDay(seed: number, day: number, _options: BountyBoardO
   // Warm up: nearby seeds give nearby first draws.
   for (let i = 0; i < 4; i++) rng.next();
   const fight = pick(rng, ['hunt', 'bigGame']);
-  const explore = rng.next() < 0.5 ? scoutId(rng) : 'courier';
-  // No mode has a bounty yet; until one does, the third slot repeats a kind not already posted.
-  const spare = [fight === 'hunt' ? 'bigGame' : 'hunt', explore === 'courier' ? scoutId(rng) : 'courier'];
+  const exploreKinds = ['scout', 'courier', 'run'] as const;
+  const exploreKind = pick(rng, exploreKinds);
+  const explore = exploreKind === 'scout' ? scoutId(rng) : exploreKind;
+  // Until a mode has a bounty of its own, the third slot repeats a kind not already posted.
+  const spare = [
+    fight === 'hunt' ? 'bigGame' : 'hunt',
+    ...exploreKinds.filter((k) => k !== exploreKind).map((k) => (k === 'scout' ? scoutId(rng) : k)),
+  ];
   return [fight, explore, pick(rng, spare)];
 }
 
@@ -102,6 +110,9 @@ export function killCounts(kind: BountyKind, monsterLevel: number, heroLevel: nu
   if (kind === 'bigGame') return monsterLevel > heroLevel;
   return false;
 }
+
+/** Does finishing an Ember Run count for this bounty? */
+export const runCounts = (kind: BountyKind): boolean => kind === 'run';
 
 /** How far along a bounty is, from the counters and the places and people seen today. */
 export function bountyCount(def: BountyDef, count: number, seen: readonly string[]): number {

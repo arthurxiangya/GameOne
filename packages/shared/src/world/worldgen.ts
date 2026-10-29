@@ -1,5 +1,6 @@
 import type { MonsterType } from '../game/monsters';
 import { NPC_PLACEMENTS, type NpcDef } from '../game/npcs';
+import type { RaceCourse } from '../game/race';
 import { ValueNoise } from '../math/noise';
 import { Mulberry32, type RandomSource } from '../math/random';
 import { clamp, lerp, smoothstep } from '../math/scalar';
@@ -35,6 +36,8 @@ export interface GeneratedWorld {
   readonly landmarks: readonly Landmark[];
   /** Every character, with zone characters moved onto solid ground. */
   readonly npcs: readonly NpcDef[];
+  /** The Ember Run: start line in Emberhold and checkpoints through every zone. */
+  readonly raceCourse: RaceCourse;
 }
 
 interface House {
@@ -71,6 +74,7 @@ export function generateWorld(seed: number): GeneratedWorld {
   plantTrees(world, noise);
   const landmarks = placeLandmarks(world, lampPoints);
   const npcs = placeNpcs(world);
+  const raceCourse = placeRaceCourse(world);
   world.computeColumnExtents();
 
   return {
@@ -82,6 +86,7 @@ export function generateWorld(seed: number): GeneratedWorld {
     playerSpawn: { x: 0, y: TOWN_Y + 0.5, z: 5 },
     landmarks,
     npcs,
+    raceCourse,
   };
 }
 
@@ -560,4 +565,21 @@ function placeNpcs(world: VoxelWorld): NpcDef[] {
     );
     return { ...npc, x: spot.x, z: spot.z };
   });
+}
+
+/**
+ * Checkpoints on a loop through every zone, in order: Sunmeadow, the Amber Dunes, Reedmere,
+ * the Frostspine foothills and Lanternwood, then back to the start line on the south road.
+ */
+const RACE_LOOP: readonly (readonly [number, number])[] = [
+  [14, 26], [0, 46], [-30, 38], [-46, 6], [-28, -32], [0, -40], [34, -26], [44, 8],
+];
+
+function placeRaceCourse(world: VoxelWorld): RaceCourse {
+  const at = (x: number, z: number): Vec3 => ({ x, y: world.surfaceY(x, z), z });
+  const checkpoints = RACE_LOOP.map(([nx, nz]) => {
+    const spot = nearest(world, nx, nz, 10, (x, z) => isStandable(world, x, z)) ?? { x: nx, z: nz };
+    return at(spot.x, spot.z);
+  });
+  return { start: at(0, 13), checkpoints };
 }

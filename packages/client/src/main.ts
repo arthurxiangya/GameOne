@@ -5,6 +5,7 @@ import { LoopbackTransport } from './net/loopback-transport';
 import type { TransportFactory } from './net/transport';
 import { WebSocketTransport } from './net/websocket-transport';
 import { browserTime } from './offline/browser-time';
+import { LocalStorageLeaderboardRepository } from './offline/local-storage-leaderboard-repository';
 import { LocalStoragePlayerRepository, browserStorage } from './offline/local-storage-player-repository';
 
 declare global {
@@ -31,7 +32,11 @@ window.addEventListener(
 function offlineTransport(): TransportFactory {
   let server: EmbeddedServer | null = null;
   const getServer = (): EmbeddedServer =>
-    (server ??= createEmbeddedServer({ repository: new LocalStoragePlayerRepository(browserStorage()), time: browserTime }));
+    (server ??= createEmbeddedServer({
+      repository: new LocalStoragePlayerRepository(browserStorage()),
+      boards: new LocalStorageLeaderboardRepository(browserStorage()),
+      time: browserTime,
+    }));
   const save = (): void => void server?.saveAll();
   window.lanternwoodServerStats = () => server?.stats() ?? null;
   window.addEventListener('pagehide', save);

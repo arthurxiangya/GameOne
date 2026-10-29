@@ -186,6 +186,34 @@ async function preview(browser, dir) {
       .then(() => true, () => false);
     check(stable, 'the stable lists every mount and pet');
     await solo.page.keyboard.press('Escape');
+
+    // The Ember Run: walk to the start line beside Pip, start a run, see the countdown and the timer, give up.
+    await solo.page.keyboard.down('w');
+    const atStart = await solo.page
+      .waitForFunction(() => {
+        const game = window.lanternwood;
+        game.debugFace(1.2, 13);
+        const p = game.debugState.position;
+        return Math.hypot(p.x - 1.2, p.z - 13) < 1.2;
+      }, null, { timeout: 20_000, polling: 100 })
+      .then(() => true, () => false);
+    await solo.page.keyboard.up('w');
+    check(atStart, 'the hero walks to the Ember Run start line');
+    await solo.page.keyboard.press('e');
+    const started = await solo.page
+      .click('#dlgActs button:has-text("Start the run")', { timeout: 5000 })
+      .then(() => true, () => false);
+    check(started, 'Pip starts an Ember Run');
+    const running = await solo.page
+      .waitForFunction(() => {
+        const bar = document.getElementById('modebar');
+        return bar && !bar.hidden && /Checkpoint 1 of 8/.test(bar.textContent ?? '');
+      }, null, { timeout: 15_000 })
+      .then(() => true, () => false);
+    check(running, 'the run counts down, then the timer runs toward checkpoint 1');
+    await solo.page.click('#mbQuit');
+    const quit = await solo.page.waitForFunction(() => document.getElementById('modebar')?.hidden, null, { timeout: 5000 }).then(() => true, () => false);
+    check(quit, 'giving up ends the run');
     checkRendering('preview', moved);
     check(start.hp > 0, `hero has health (${start.hp})`);
   } finally {

@@ -3,12 +3,15 @@ import {
   MOUNTS,
   MOUNT_CALL_SECONDS,
   NPC_INTERACT_RANGE,
+  PHYSICS,
   PROTOCOL_VERSION,
   SIM_DT,
   SKILLS,
   SKILL_IDS,
   TITLES,
+  coursePoints,
   generateWorld,
+  medalTimes,
   mountSpeed,
   zoneForBiome,
   type ChainId,
@@ -16,6 +19,8 @@ import {
   type GameEvent,
   type GeneratedWorld,
   type InputFrame,
+  type Medal,
+  type ModeState,
   type MoveIntent,
   type NpcDef,
   type PlayerProgress,
@@ -34,6 +39,7 @@ import { CameraRig } from '../render/camera-rig';
 import { CompanionViews } from '../render/companion-views';
 import { Effects } from '../render/effects';
 import { EntityViews } from '../render/entity-views';
+import { RaceMarkers } from '../render/race-markers';
 import { FpsMeter, PerformanceGovernor } from '../render/performance-governor';
 import { SceneContext } from '../render/scene-context';
 import { SkySystem } from '../render/sky';
@@ -46,6 +52,8 @@ import { DialogView } from '../ui/dialog';
 import { byId } from '../ui/dom';
 import { Hud } from '../ui/hud';
 import { JournalView } from '../ui/journal';
+import { LeaderboardView } from '../ui/leaderboard';
+import { ModeBar } from '../ui/mode-bar';
 import { StableView } from '../ui/stable';
 import { Minimap, type MapMarker } from '../ui/minimap';
 import { Notices } from '../ui/notices';
@@ -85,6 +93,7 @@ export class GameClient {
   private readonly terrain: TerrainRenderer;
   private readonly views: EntityViews;
   private readonly companions: CompanionViews;
+  private readonly raceMarkers: RaceMarkers;
   private readonly effects: Effects;
   private readonly cameraRig: CameraRig;
   private readonly pointer: PointerCamera;
@@ -96,6 +105,8 @@ export class GameClient {
   private readonly dialog = new DialogView();
   private readonly journal: JournalView;
   private readonly stable: StableView;
+  private readonly boards = new LeaderboardView();
+  private readonly modeBar: ModeBar;
   private readonly title: TitleScreen;
   private readonly keyboard = new KeyboardInput();
   private readonly joystick: Joystick;
@@ -138,6 +149,9 @@ export class GameClient {
   private tracked: ChainId | null = null;
   /** Seconds left on the mount call bar, counted down locally between snapshots. */
   private callLeft = 0;
+  /** What the hero is doing in a game mode, from the server. */
+  private mode: ModeState | null = null;
+  private medals: Readonly<Record<Medal, number>> | undefined;
   private nearNpc: NpcDef | null = null;
   private frameCount = 0;
   private lastFrame = performance.now();
@@ -166,6 +180,8 @@ export class GameClient {
     this.terrain = new TerrainRenderer(this.ctx.scene, options.reduceMotion);
     this.views = new EntityViews(this.ctx.scene);
     this.companions = new CompanionViews(this.ctx.scene);
+    this.raceMarkers = new RaceMarkers(this.ctx.scene);
+    this.modeBar = new ModeBar(() => this.connection.send({ t: 'quit' }));
     this.effects = new Effects(this.ctx.scene);
     this.cameraRig = new CameraRig(this.ctx.camera);
     this.overlay = new Overlay(byId('overlay'), (x, y, z) => this.ctx.toScreen(x, y, z));
@@ -234,6 +250,7 @@ export class GameClient {
         case 'j': this.toggleJournal(); break;
         case 'p': this.toggleStable(); break;
         case 'r': this.toggleMount(); break;
+        case 'l': this.toggleBoards(); break;
         case 'tab': this.cycleTarget(); break;
         case 'enter': if (!this.options.offline) { this.keyboard.clear(); this.chat.open(); } break;
         case 'escape': this.escape(); break;
@@ -254,6 +271,7 @@ export class GameClient {
     byId('journalBtn').addEventListener('click', () => this.toggleJournal());
     byId('stableBtn').addEventListener('click', () => this.toggleStable());
     byId('rideBtn').addEventListener('click', () => this.toggleMount());
+    byId('boardsBtn').addEventListener('click', () => this.toggleBoards());
     byId('questBox').addEventListener('click', () => this.toggleJournal());
     window.addEventListener('resize', () => this.minimap.resize());
   }
@@ -264,6 +282,8 @@ export class GameClient {
     this.generated = generateWorld(seed);
     this.terrain.load(this.generated);
     this.views.spawnNpcs(this.generated.world, this.generated.npcs);
+    this.raceMarkers.load(this.generated.raceCourse);
+    this.medals = medalTimes(this.generated.raceCourse, PHYSICS.walkSpeed);
     this.minimap.paint(this.generated.world);
     if (this.local) this.local.setWorld(this.generated.world);
     else this.local = new LocalPlayer(this.generated.world);
@@ -314,7 +334,11 @@ export class GameClient {
     this.dialog.close();
     this.journal.close();
     this.stable.close();
+    this.boards.close();
     this.companions.clear();
+    this.mode = null;
+    this.modeBar.update(null, 0, null);
+    this.raceMarkers.update(null, 0);
     this.chat.close();
     this.setTarget(null);
     for (const id of ['menu', 'death']) byId(id).hidden = true;
@@ -334,6 +358,8 @@ export class GameClient {
       case 'welcome': this.onWelcome(msg); break;
       case 'snapshot': this.onSnapshot(msg); break;
       case 'progress': this.onProgress(msg.p); break;
+      case 'mode': this.mode = msg.m; break;
+      case 'boards': this.boards.show(msg.boards, this.progress?.name ?? ''); break;
       case 'chat': this.chat.chat(msg.from, msg.text); break;
       case 'system': this.chat.system(msg.text, 'sys'); break;
       case 'error': this.notices.toast(msg.reason); break;
@@ -417,7 +443,7 @@ export class GameClient {
     this.hud.setTracker(trackerInfo(p, this.tracked));
     this.questTimer = 0;
     const npc = this.dialog.npc;
-    if (npc && this.dialog.isOpen) this.dialog.show(npc, npcTopics(npc, p, Date.now()), (a) => this.chooseTopic(npc, a), true);
+    if (npc && this.dialog.isOpen) this.dialog.show(npc, npcTopics(npc, p, Date.now(), { medals: this.medals }), (a) => this.chooseTopic(npc, a), true);
     this.journal.refresh(p, this.tracked, Date.now());
     this.stable.refresh(p);
   }
@@ -429,6 +455,18 @@ export class GameClient {
       this.dialog.close();
       this.journal.close();
       this.stable.open(this.progress);
+    }
+  }
+
+  private toggleBoards(): void {
+    if (this.phase !== 'playing') return;
+    if (this.boards.isOpen) this.boards.close();
+    else {
+      this.dialog.close();
+      this.journal.close();
+      this.stable.close();
+      this.boards.open();
+      this.connection.send({ t: 'boards' });
     }
   }
 
@@ -605,7 +643,7 @@ export class GameClient {
     if (!this.progress || this.self?.dead) return;
     this.journal.close();
     this.connection.send({ t: 'npc', npc: npc.id, action: 'greet', arg: null });
-    this.dialog.show(npc, npcTopics(npc, this.progress, Date.now()), (a) => this.chooseTopic(npc, a));
+    this.dialog.show(npc, npcTopics(npc, this.progress, Date.now(), { medals: this.medals }), (a) => this.chooseTopic(npc, a));
   }
 
   private chooseTopic(npc: NpcDef, action: TopicAction): void {
@@ -618,6 +656,7 @@ export class GameClient {
     else if (this.dialog.isOpen) this.dialog.close();
     else if (this.journal.isOpen) this.journal.close();
     else if (this.stable.isOpen) this.stable.close();
+    else if (this.boards.isOpen) this.boards.close();
     else this.setTarget(null);
   }
 
@@ -693,6 +732,7 @@ export class GameClient {
     const lift = this.companions.update(this.selfId, { ...this.renderPos, yaw: local.yaw }, this.self?.mt ?? null, this.progress?.pet ?? null, dead, dt, this.now);
     this.views.update(this.selfId, { ...this.renderPos, y: this.renderPos.y + lift, yaw: local.yaw, dead, attacking: false, seated: lift > 0 }, dt, this.now);
     this.updateCallBar(elapsed);
+    this.updateMode();
     const lamp = this.views.heroLampPosition();
     if (lamp) this.sky.heroLight.position.set(lamp.x, lamp.y, lamp.z);
     this.sky.heroLight.intensity = 10 * this.sky.night;
@@ -732,7 +772,8 @@ export class GameClient {
       strafe /= len;
       fwd /= len;
     }
-    if (this.self?.dead || this.chat.isOpen) fwd = strafe = 0;
+    const countdown = this.mode?.kind === 'race' && this.mode.phase === 'countdown';
+    if (this.self?.dead || this.chat.isOpen || countdown) fwd = strafe = 0;
     return { fwd, strafe, yaw: this.cameraRig.yaw, jump: false, swim: this.jumpTouch || kb.isDown(' ') };
   }
 
@@ -790,6 +831,27 @@ export class GameClient {
     if (open && Math.hypot(open.x - this.renderPos.x, open.z - this.renderPos.z) > 6) this.dialog.close();
   }
 
+  /** The next point of the current run, or null. */
+  private nextRacePoint(): Vec3 | null {
+    const mode = this.mode;
+    if (mode?.kind !== 'race' || !this.generated) return null;
+    return coursePoints(this.generated.raceCourse)[mode.next] ?? null;
+  }
+
+  private updateMode(): void {
+    const target = this.nextRacePoint();
+    let bearing: number | null = null;
+    if (target) {
+      const yaw = this.cameraRig.yaw;
+      const dx = target.x - this.renderPos.x;
+      const dz = target.z - this.renderPos.z;
+      bearing = Math.atan2(dx * Math.cos(yaw) - dz * Math.sin(yaw), -dx * Math.sin(yaw) - dz * Math.cos(yaw));
+    }
+    const count = this.modeBar.update(this.mode, this.clock.serverNow(this.now), bearing);
+    if (count !== null) this.notices.banner(count > 0 ? String(count) : 'Go!', count > 0 ? 'Ember Run' : 'Run!');
+    this.raceMarkers.update(this.mode?.kind === 'race' ? this.mode.next : null, this.now);
+  }
+
   private updateCallBar(elapsed: number): void {
     const bar = byId('castbar');
     this.callLeft = Math.max(0, this.callLeft - elapsed);
@@ -824,6 +886,8 @@ export class GameClient {
   }
 
   private computeQuestMark(): { x: number; z: number } | null {
+    const racing = this.nextRacePoint();
+    if (racing) return racing;
     const p = this.progress;
     if (!p || !this.generated) return null;
     const live: { type: string; x: number; z: number }[] = [];
@@ -855,6 +919,11 @@ export class GameClient {
   private feetOf(id: number): Vec3 | null {
     if (id === this.selfId) return { ...this.renderPos };
     return this.views.positionOf(id, 0);
+  }
+
+  /** Turns the camera so that walking forward heads for (x, z). For automated browser checks. */
+  debugFace(x: number, z: number): void {
+    this.cameraRig.yaw = Math.atan2(-(x - this.renderPos.x), -(z - this.renderPos.z));
   }
 
   /** Exposed for debugging in the browser console and for automated browser checks. */

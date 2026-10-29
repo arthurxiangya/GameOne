@@ -171,6 +171,10 @@ Skills, NPC actions, chat and respawn are discrete commands. The client shows co
 
 The world is never sent. The server sends only its seed, and the client runs the same `generateWorld(seed)`, which takes about 0.2 s. Chunks are meshed a few per frame with face culling and per-vertex ambient occlusion.
 
+### Game modes
+
+Modes such as the Ember Run live in `server/src/application/modes/`. Each implements `GameMode`: a `step` each tick, the hero's `status` for their HUD, and optional rule hooks (`skillBlocked`, `mountBlocked`, `ignoredByMonsters`, `frozen`, `onPlayerFell`, `onPlayerRemoved`). A mode changes the world only through `ModeHost` (teleport, rewards, achievements, leaderboards). Combat, monster AI and mounts ask the world for those rules instead of knowing about any mode (ADR 0011). Results go to `Leaderboards`, which keeps the boards in memory and writes them through a `LeaderboardRepository` (a JSON file online, localStorage in single-player).
+
 ## 7. Play modes: online and single-player
 
 The client reaches a server through one `Transport` interface. Everything above it is identical in both modes: prediction, reconciliation, interpolation, the HUD and the protocol messages, which stay JSON text in both.

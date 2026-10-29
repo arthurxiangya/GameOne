@@ -1,6 +1,7 @@
 import { createGameServer } from './app';
 import { ConfigError, loadConfig } from './config';
 import { createJsonLogger } from './infrastructure/logging/json-logger';
+import { JsonFileLeaderboardRepository } from './infrastructure/persistence/json-file-leaderboard-repository';
 import { JsonFilePlayerRepository } from './infrastructure/persistence/json-file-player-repository';
 import { systemTime } from './infrastructure/time/system-time';
 
@@ -11,7 +12,8 @@ async function main(): Promise<void> {
   const repository = new JsonFilePlayerRepository(config.dataDir);
   await repository.init();
 
-  const server = createGameServer({ config, logger, time: systemTime, repository });
+  const boards = new JsonFileLeaderboardRepository(config.dataDir);
+  const server = createGameServer({ config, logger, time: systemTime, repository, boards });
   const port = await server.listen();
   logger.info('server listening', { host: config.host, port, seed: config.worldSeed, tickRate: config.tickRate, data: config.dataDir });
 

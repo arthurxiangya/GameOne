@@ -1,3 +1,4 @@
+import type { Board } from '../game/leaderboards';
 import type { MonsterType } from '../game/monsters';
 import type { MountId } from '../game/mounts';
 import type { PetId } from '../game/pets';
@@ -37,6 +38,10 @@ export type ClientMessage =
   | { readonly t: 'choose'; readonly kind: 'mount'; readonly id: MountId | null }
   | { readonly t: 'choose'; readonly kind: 'pet'; readonly id: PetId | null }
   | { readonly t: 'petName'; readonly pet: PetId; readonly name: string }
+  /** Give up the current run (and, later, other mode activities). */
+  | { readonly t: 'quit' }
+  /** Ask for the leaderboards. */
+  | { readonly t: 'boards' }
   | { readonly t: 'chat'; readonly text: string }
   | { readonly t: 'respawn' }
   | { readonly t: 'ping'; readonly at: number };
@@ -123,6 +128,18 @@ export interface SelfState {
 
 export type LogClass = 'sys' | 'foe' | 'loot' | 'good';
 
+/** What a hero is doing in a game mode, for their HUD. Times are server simulation time. */
+export type ModeState = {
+  readonly kind: 'race';
+  readonly phase: 'countdown' | 'running';
+  /** When the clock starts (or started). */
+  readonly startsAt: number;
+  /** Index into the course points of the next point to reach (1 = first checkpoint). */
+  readonly next: number;
+  /** Number of checkpoints, not counting the finish. */
+  readonly total: number;
+};
+
 export type GameEvent =
   | { readonly e: 'dmg'; readonly id: number; readonly amt: number; readonly crit: boolean }
   | { readonly e: 'heal'; readonly id: number; readonly amt: number }
@@ -174,6 +191,9 @@ export type ServerMessage =
       readonly ev: readonly GameEvent[];
     }
   | { readonly t: 'progress'; readonly p: PlayerProgress }
+  /** Your mode state changed (null: not in a mode). */
+  | { readonly t: 'mode'; readonly m: ModeState | null }
+  | { readonly t: 'boards'; readonly boards: readonly Board[] }
   | { readonly t: 'chat'; readonly from: string; readonly text: string }
   | { readonly t: 'system'; readonly text: string }
   | { readonly t: 'error'; readonly reason: string }

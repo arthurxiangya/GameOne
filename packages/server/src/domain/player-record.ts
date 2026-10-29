@@ -10,6 +10,7 @@ import {
   emptyBountyProgress,
   isMountId,
   isPetId,
+  newRecords,
   isTitleId,
   newChainProgress,
   newProgress,
@@ -18,6 +19,7 @@ import {
   type BountyProgress,
   type ChainProgress,
   type EggState,
+  type HeroRecords,
   type MountId,
   type PetState,
   type PlayerProgress,
@@ -55,6 +57,7 @@ export const progressFromRecord = (r: PlayerRecord): PlayerProgress =>
     pets: r.pets,
     pet: r.pet,
     eggs: r.eggs,
+    records: r.records,
   });
 
 export const recordFromPlayer = (base: PlayerRecord, player: Player, isoTime: string): PlayerRecord => ({
@@ -104,6 +107,7 @@ export function parsePlayerRecord(data: unknown): PlayerRecord | null {
     pets,
     pet: isPetId(r.pet) && owns(r.pet) ? r.pet : null,
     eggs: parseEggs(r.eggs).filter((e) => !owns(e.pet)),
+    records: parseRecords(r.records),
     createdAt: typeof r.createdAt === 'string' ? r.createdAt : new Date(0).toISOString(),
     updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : new Date(0).toISOString(),
   };
@@ -120,6 +124,14 @@ function grantMissingUnlocks(story: StoryProgress, titles: TitleId[], mounts: Mo
       if (reward.mount && !mounts.includes(reward.mount)) mounts.push(reward.mount);
     });
   }
+}
+
+function parseRecords(v: unknown): HeroRecords {
+  const records = newRecords();
+  if (!isRecord(v)) return records;
+  if (typeof v.raceBest === 'number' && Number.isFinite(v.raceBest) && v.raceBest > 0) records.raceBest = v.raceBest;
+  if (Number.isInteger(v.raceDay)) records.raceDay = v.raceDay as number;
+  return records;
 }
 
 function parsePets(v: unknown): PetState[] {

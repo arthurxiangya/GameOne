@@ -68,7 +68,7 @@ export class StoryService {
   }
 
   onAchievement(player: Player, a: Achievement): void {
-    if (a.kind === 'greet') return;
+    if (a.kind === 'greet' || a.kind === 'race') return;
     for (const [id, cp] of Object.entries(player.progress.story)) {
       if (cp.state !== 'active') continue;
       const chain = chainById(id as ChainId);

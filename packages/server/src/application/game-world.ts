@@ -18,6 +18,7 @@ import {
   type GeneratedWorld,
   type InputFrame,
   type Landmark,
+  type ModeState,
   type MonsterAnim,
   type MountId,
   type NpcAction,
@@ -29,6 +30,7 @@ import {
   type ShopItemId,
   type SkillId,
   type TitleId,
+  type Vec3,
   type VoxelWorld,
 } from '@lanternwood/shared';
 import { Monster } from '../domain/entities/monster';
@@ -45,6 +47,9 @@ import { ProgressTracker } from '../domain/services/progress-tracker';
 import { ProgressionService } from '../domain/services/progression-service';
 import { ShopService } from '../domain/services/shop-service';
 import { StoryService } from '../domain/services/story-service';
+import type { LeaderboardSink } from './leaderboards';
+import { EmberRun } from './modes/ember-run';
+import type { GameMode, ModeHost } from './modes/game-mode';
 import { SpatialHash } from './spatial-hash';
 
 export type PlayerCommand =
@@ -55,6 +60,7 @@ export type PlayerCommand =
   | { readonly kind: 'chooseMount'; readonly mount: MountId | null }
   | { readonly kind: 'choosePet'; readonly pet: PetId | null }
   | { readonly kind: 'renamePet'; readonly pet: PetId; readonly name: string }
+  | { readonly kind: 'quit' }
   | { readonly kind: 'respawn' };
 
 export interface GameWorldOptions {
@@ -64,9 +70,12 @@ export interface GameWorldOptions {
   readonly startTimeOfDay?: number;
   /** Calendar for daily bounties. Defaults to the system clock. */
   readonly calendar?: Calendar;
+  /** Where modes post results. Defaults to nowhere. */
+  readonly boards?: LeaderboardSink;
 }
 
-const systemCalendar: Calendar = { today: () => dayNumber(Date.now()) };
+const systemCalendar: Calendar = { today: () => dayNumber(Date.now()), iso: () => new Date().toISOString() };
+const noBoards: LeaderboardSink = { submit: () => null };
 
 /**
  * Movement is paid for with input credit: one frame per tick of real time. Credit banks up to
@@ -94,6 +103,8 @@ const SLOW_CHECK_TICKS = 10;
  * It knows nothing about sockets or storage.
  */
 export class GameWorld implements CombatWorld, AiWorld {
+  readonly emberRun: EmberRun;
+  readonly raceCourse: GeneratedWorld['raceCourse'];
   readonly voxels: VoxelWorld;
   readonly seed: number;
   readonly npcs: readonly NpcDef[];
@@ -114,6 +125,7 @@ export class GameWorld implements CombatWorld, AiWorld {
   private readonly mounts: MountService;
   private readonly pets: PetService;
   private readonly calendar: Calendar;
+  private readonly modes: readonly GameMode[];
   private today: number;
   private nextEntityId = 1;
   private tickCount = 0;
@@ -138,6 +150,19 @@ export class GameWorld implements CombatWorld, AiWorld {
     this.mounts = new MountService(this.events, this.clock);
     this.tracker = new ProgressTracker(this.story, this.bounties, this.pets, this.calendar);
     this.shop = new ShopService(this.events, progression, this.pets);
+    const host: ModeHost = {
+      events: this.events,
+      achievements: this.tracker,
+      progression,
+      boards: options.boards ?? noBoards,
+      calendar: this.calendar,
+      now: () => this.simTime,
+      teleport: (player, to) => this.teleport(player, to),
+      modeChanged: (player) => void (player.modeDirty = true),
+    };
+    this.raceCourse = generated.raceCourse;
+    this.emberRun = new EmberRun(host, generated.raceCourse);
+    this.modes = [this.emberRun];
     this.combat = new CombatService(this, rng, this.clock, this.events, progression, this.tracker);
     this.ai = new MonsterAi(this, this.combat, this.events, rng);
 
@@ -218,6 +243,7 @@ export class GameWorld implements CombatWorld, AiWorld {
     const player = this.playersById.get(id);
     if (!player) return undefined;
     this.playersById.delete(id);
+    for (const mode of this.modes) mode.onPlayerRemoved?.(player);
     for (const m of this.monstersById.values()) m.threat.delete(id);
     this.playerGrid.rebuild(this.playersById.values());
     return player;
@@ -260,7 +286,10 @@ export class GameWorld implements CombatWorld, AiWorld {
         result = this.chooseTitle(player, command.title);
         break;
       case 'mount':
-        result = command.on ? this.mounts.call(player) : this.mounts.dismiss(player);
+        result = command.on ? this.callMount(player) : this.mounts.dismiss(player);
+        break;
+      case 'quit':
+        result = this.modes.some((mode) => mode.quit?.(player)) ? ok() : fail('There is nothing to give up.');
         break;
       case 'chooseMount':
         result = this.mounts.choose(player, command.mount);
@@ -296,6 +325,43 @@ export class GameWorld implements CombatWorld, AiWorld {
       if (!asleep) this.ai.update(m, dt);
     }
     this.monsterGrid.rebuild(this.monstersById.values());
+    for (const mode of this.modes) mode.step(dt);
+  }
+
+  // ------------------------------------------------------------------ rules from modes
+
+  /** The hero's state in whichever mode they are in, for their HUD. */
+  modeStatus(player: Player): ModeState | null {
+    for (const mode of this.modes) {
+      const status = mode.status(player);
+      if (status) return status;
+    }
+    return null;
+  }
+
+  skillBlocked(player: Player, skill: SkillId): string | null {
+    for (const mode of this.modes) {
+      const reason = mode.skillBlocked?.(player, skill);
+      if (reason) return reason;
+    }
+    return null;
+  }
+
+  ignoredByMonsters(player: Player): boolean {
+    return this.modes.some((mode) => mode.ignoredByMonsters?.(player));
+  }
+
+  private callMount(player: Player): Result {
+    for (const mode of this.modes) {
+      const reason = mode.mountBlocked?.(player);
+      if (reason) return fail(reason);
+    }
+    return this.mounts.call(player);
+  }
+
+  private teleport(player: Player, to: Readonly<Vec3>): void {
+    player.teleport(to);
+    player.inputQueue.length = 0;
   }
 
   drainEvents(): RoutedEvent[] {
@@ -331,10 +397,11 @@ export class GameWorld implements CombatWorld, AiWorld {
 
   private applyInput(player: Player, frame: InputFrame): void {
     const intent = sanitizeIntent(frame.fwd, frame.strafe, frame.yaw);
+    const still = player.dead || this.modes.some((mode) => mode.frozen?.(player));
     const result = stepPlayer(
       this.voxels,
       player.body,
-      player.dead
+      still
         ? { fwd: 0, strafe: 0, yaw: intent.yaw, jump: false, swim: false }
         : { ...intent, jump: frame.jump, swim: frame.swim },
       SIM_DT,
@@ -355,6 +422,7 @@ export class GameWorld implements CombatWorld, AiWorld {
   }
 
   private rescueFallenPlayer(player: Player): void {
+    for (const mode of this.modes) mode.onPlayerFell?.(player);
     player.progress.falls += 1;
     player.touchProgress();
     player.teleport(this.spawnPoint);
@@ -415,6 +483,8 @@ export class GameWorld implements CombatWorld, AiWorld {
         return this.shop.sharpen(player);
       case 'buy':
         return this.shop.buy(player, arg as ShopItemId);
+      case 'race':
+        return this.emberRun.start(player);
     }
   }
 

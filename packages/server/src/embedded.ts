@@ -1,16 +1,19 @@
 import { nullLogger, type ClientLink, type SystemTime } from './application/ports';
-import type { PlayerRepository } from './domain/ports';
+import type { LeaderboardRepository, PlayerRepository } from './domain/ports';
 import type { LoopStats } from './infrastructure/scheduling/fixed-step-loop';
 import { createSimulation } from './simulation';
 
 export type { ClientLink, SystemTime } from './application/ports';
-export type { PlayerRecord, PlayerRepository } from './domain/ports';
+export type { LeaderboardRepository, PlayerRecord, PlayerRepository, StoredBoards } from './domain/ports';
+export { parseBoards } from './domain/leaderboard-record';
 export type { LoopStats } from './infrastructure/scheduling/fixed-step-loop';
 export { parsePlayerRecord } from './domain/player-record';
 export { InMemoryPlayerRepository } from './infrastructure/persistence/in-memory-player-repository';
 
 export interface EmbeddedServerOptions {
   readonly repository: PlayerRepository;
+  /** Where single-player leaderboards are kept. Defaults to memory. */
+  readonly boards?: LeaderboardRepository;
   readonly time: SystemTime;
   readonly worldSeed?: number;
   readonly dayLengthSeconds?: number;
@@ -71,6 +74,7 @@ export function createEmbeddedServer(options: EmbeddedServerOptions): EmbeddedSe
       dayLengthSeconds: options.dayLengthSeconds ?? 480,
     },
     repository: options.repository,
+    boards: options.boards,
     logger: nullLogger,
     time: options.time,
     hashToken: localTokenHasher,

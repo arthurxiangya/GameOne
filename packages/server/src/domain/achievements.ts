@@ -1,4 +1,4 @@
-import type { LandmarkId, MonsterType, NpcId } from '@lanternwood/shared';
+import type { LandmarkId, Medal, MonsterType, NpcId } from '@lanternwood/shared';
 import type { Player } from './entities/player';
 
 /**
@@ -9,7 +9,9 @@ import type { Player } from './entities/player';
 export type Achievement =
   | { readonly kind: 'kill'; readonly monster: MonsterType; readonly level: number }
   | { readonly kind: 'visit'; readonly place: LandmarkId }
-  | { readonly kind: 'greet'; readonly npc: NpcId };
+  | { readonly kind: 'greet'; readonly npc: NpcId }
+  /** Finished an Ember Run, with or without a medal. */
+  | { readonly kind: 'race'; readonly medal: Medal | null };
 
 export interface AchievementSink {
   record(player: Player, achievement: Achievement): void;
