@@ -69,6 +69,7 @@
         </button>
       </div>
       <div class="meter"><i id="tFill"></i><span id="tText">0 / 0</span></div>
+      <button class="btn ghost t-duel" id="tDuel" type="button" hidden>Challenge to a duel</button>
     </section>
 
     <div class="hud game topbtns">
@@ -150,7 +151,10 @@
       <b class="mb-main" id="mbMain">0:00.0</b>
       <span class="mb-sub"><svg class="mb-arrow" id="mbArrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 13 12 8 9.5 3 12z" fill="currentColor" /></svg><span id="mbSub">Checkpoint 1 of 8</span></span>
       <div class="meter mb-meter" id="mbMeter" hidden aria-label="The Great Lantern's health"><i id="mbFill"></i></div>
-      <button class="btn ghost mb-quit" id="mbQuit" type="button">Give up</button>
+      <div class="mb-acts">
+        <button class="btn primary mb-quit" id="mbAccept" type="button" hidden>Accept</button>
+        <button class="btn ghost mb-quit" id="mbQuit" type="button">Give up</button>
+      </div>
     </div>
 
     <!-- Messages -->
@@ -213,6 +217,7 @@
         <li>Open the <b>journal</b> (J) to see every story, choose which one to follow, and check today's bounties from <b>Captain Rook</b>.</li>
         <li>Visit <b>Smith Oda</b> to buy tonics, sharpen your blade, buy a mount or a pet egg, and trade <b>Ember Marks</b>.</li>
         <li>Every third night the <b>Night Bell</b> rings at dusk: the Gloom marches on Emberhold. Defend the Great Lantern on the fountain with everyone online.</li>
+        <li class="online-only">Select another hero and press <b>Challenge to a duel</b> for a level-matched fight in the Duel Ring. Nobody loses anything but rating.</li>
         <li>Race the <b>Ember Run</b> with <b>Pip the Runner</b> on the south road; <b>L</b> shows the leaderboards.</li>
         <li>Press <b>R</b> to ride your mount (taking a hit or using a skill puts you back on foot) and <b>P</b> for your stable and pets. Eggs hatch after you win enough fights.</li>
         <li>Tap a monster to target it, then use your skills. Strike repeats while held.</li>

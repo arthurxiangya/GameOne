@@ -257,6 +257,8 @@ body.riding #rideBtn { background: var(--lantern); color: var(--night); }
 .mb-arrow { width: 16px; height: 16px; color: var(--lantern); }
 .mb-meter { width: 100%; height: 8px; margin-top: 4px; }
 .mb-meter i { background: var(--lantern); }
+.mb-acts { display: flex; gap: 6px; }
+.t-duel { min-height: 30px; padding: 0 10px; font-size: 11px; }
 .mb-quit { margin-top: 4px; min-height: 30px; padding: 0 10px; font-size: 11px; }
 @media (max-width: 720px) {
   /* The top of a phone screen is taken by the hero frame and the map: sit above the skill buttons instead. */

@@ -98,6 +98,13 @@ export function parseClientMessage(data: unknown): ParseResult {
       return okMsg({ t: 'quit' });
     case 'boards':
       return okMsg({ t: 'boards' });
+    case 'duel':
+      if (data.action === 'challenge') {
+        if (!isId(data.target)) return fail('Invalid duel target');
+        return okMsg({ t: 'duel', action: 'challenge', target: data.target });
+      }
+      if (data.action === 'accept' || data.action === 'decline') return okMsg({ t: 'duel', action: data.action });
+      return fail('Unknown duel action');
     case 'ping':
       if (!isFiniteIn(data.at, 0, Number.MAX_SAFE_INTEGER)) return fail('Invalid ping');
       return okMsg({ t: 'ping', at: data.at });

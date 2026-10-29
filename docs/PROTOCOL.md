@@ -1,4 +1,4 @@
-# Wire protocol (v7)
+# Wire protocol (v8)
 
 All messages are JSON text frames on `ws(s)://<host>/ws`, discriminated by the `t` field. Types live in [`packages/shared/src/protocol/messages.ts`](../packages/shared/src/protocol/messages.ts). Client messages are validated by `parseClientMessage`; anything else is rejected with an `error`. Field names are short because snapshots go out twenty times a second.
 
@@ -26,7 +26,8 @@ client                                   server
 | `mount` | `on` | `true` calls your chosen mount (1.5 s; not within 5 s of combat), `false` gets off. Using a skill or taking damage also puts you on foot. |
 | `choose` | `kind`, `id` | `kind: 'mount'` picks which owned mount R calls; `kind: 'pet'` picks which owned pet follows you. `id` may be `null`. |
 | `petName` | `pet`, `name` | Renames an owned pet; the name is sanitised like a hero name. |
-| `quit` | — | Gives up the current mode activity, such as an Ember Run. |
+| `duel` | `action`, `target` | `action: 'challenge'` with another hero's entity id in `target` (online only, within 12 blocks, neither of you busy); `'accept'` or `'decline'` answers a challenge within 15 s. |
+| `quit` | — | Gives up the current mode activity: an Ember Run, a Rift Trial, a duel (cancels a challenge, declines one, or yields a fight). |
 | `boards` | — | Asks for the leaderboards; answered with `boards`. |
 | `chat` | `text` | Sanitised and capped at 140 characters; at most one every two seconds after a burst of five. |
 | `respawn` | — | Only while defeated. |
@@ -39,7 +40,7 @@ client                                   server
 | `welcome` | `v`, `you`, `seed`, `tickRate`, `look`, `progress`, `day`, `dayLength` | `you` is your entity id. Generate the world locally from `seed`. |
 | `reject` | `reason` | Sent before the server closes a failed hello (old client, full server, load failure). |
 | `snapshot` | `tick`, `st`, `day`, `ack`, `you`, `ents`, `ev` | See below. |
-| `mode` | `m` | Your mode state changed, or `null`. Ember Run: `{kind: 'race', phase, startsAt, next, total}` (`startsAt` is server time; `next` indexes `coursePoints`). Rift Trial: `{kind: 'rift', phase, wave, waves, endsAt, deadline, remaining, party, score}` with `phase` one of `gathering`, `starting`, `wave`, `break`, `done`, `failed`. |
+| `mode` | `m` | Your mode state changed, or `null`. Ember Run: `{kind: 'race', phase, startsAt, next, total}` (`startsAt` is server time; `next` indexes `coursePoints`). Rift Trial: `{kind: 'rift', phase, wave, waves, endsAt, deadline, remaining, party, score}` with `phase` one of `gathering`, `starting`, `wave`, `break`, `done`, `failed`. Duel: `{kind: 'duel', phase, opponent, opponentId, endsAt, x, z, radius}` with `phase` one of `invited`, `challenging`, `countdown`, `fight`; leaving the ring at (`x`, `z`) forfeits. |
 | `boards` | `boards` | The leaderboards: `{id, entries: [{name, value, at, detail?}]}` for `race` (seconds, lower is better), `rift` and `duel`. |
 | `siege` | `s` | Lantern Night, sent to everyone: `{phase, wave, waves, lantern, lanternMax, remaining, endsAt, gates}` while a siege is on (`phase` is `warning`, `wave`, `break`, `won` or `lost`; `gates` index the generated `siegeGates`), and `null` when it clears. Sent on join if one is on; Lantern health updates at most 4 times a second. |
 | `progress` | `p` | Your persistent progress, sent whenever it changes: level, gold and tonics, each story chain's step and state, today's bounties, Ember Marks and titles. Bounties are sent as ids; `bountyFromId` in `shared` rebuilds them. |
@@ -104,3 +105,4 @@ Any incompatible change bumps `PROTOCOL_VERSION`. Older clients are rejected at 
 | 5 | Ember Run and leaderboards: `npc` action `race`, `quit` and `boards` messages, `mode` and `boards` replies |
 | 6 | Lantern Night: `siege` broadcast, Gloom monster types, story `event` objectives |
 | 7 | Rift Trials: `npc` action `rift`, `rift` mode state, the `riftlord` monster |
+| 8 | Duel Ring: `duel` message, `duel` mode state, player-versus-player hits in duels |

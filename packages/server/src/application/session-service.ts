@@ -226,6 +226,9 @@ export class SessionService {
       case 'quit':
         world.execute(player.id, { kind: 'quit' });
         return;
+      case 'duel':
+        world.execute(player.id, msg.action === 'challenge' ? { kind: 'duel', action: 'challenge', target: msg.target } : { kind: 'duel', action: msg.action });
+        return;
       case 'boards':
         this.send(session, { t: 'boards', boards: this.deps.boards?.snapshot() ?? [] });
         return;

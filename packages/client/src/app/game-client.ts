@@ -40,6 +40,7 @@ import { PointerCamera } from '../input/pointer-camera';
 import type { Transport, TransportFactory } from '../net/transport';
 import { CameraRig } from '../render/camera-rig';
 import { CompanionViews } from '../render/companion-views';
+import { DuelRing } from '../render/duel-ring';
 import { Effects } from '../render/effects';
 import { EntityViews } from '../render/entity-views';
 import { RaceMarkers } from '../render/race-markers';
@@ -97,6 +98,7 @@ export class GameClient {
   private readonly views: EntityViews;
   private readonly companions: CompanionViews;
   private readonly raceMarkers: RaceMarkers;
+  private readonly duelRing: DuelRing;
   private readonly effects: Effects;
   private readonly cameraRig: CameraRig;
   private readonly pointer: PointerCamera;
@@ -186,7 +188,11 @@ export class GameClient {
     this.views = new EntityViews(this.ctx.scene);
     this.companions = new CompanionViews(this.ctx.scene);
     this.raceMarkers = new RaceMarkers(this.ctx.scene);
-    this.modeBar = new ModeBar(() => this.connection.send({ t: 'quit' }));
+    this.duelRing = new DuelRing(this.ctx.scene);
+    this.modeBar = new ModeBar(
+      () => this.connection.send({ t: 'quit' }),
+      () => this.connection.send({ t: 'duel', action: 'accept' }),
+    );
     this.effects = new Effects(this.ctx.scene);
     this.cameraRig = new CameraRig(this.ctx.camera);
     this.overlay = new Overlay(byId('overlay'), (x, y, z) => this.ctx.toScreen(x, y, z));
@@ -270,6 +276,9 @@ export class GameClient {
     byId('leaveBtn').addEventListener('click', () => this.leave());
     byId('reviveBtn').addEventListener('click', () => this.connection.send({ t: 'respawn' }));
     byId('tClear').addEventListener('click', () => this.setTarget(null));
+    byId('tDuel').addEventListener('click', () => {
+      if (this.targetId !== null) this.connection.send({ t: 'duel', action: 'challenge', target: this.targetId });
+    });
     byId('talkBtn').addEventListener('click', () => {
       if (this.nearNpc) this.openNpc(this.nearNpc);
     });
@@ -364,7 +373,7 @@ export class GameClient {
       case 'welcome': this.onWelcome(msg); break;
       case 'snapshot': this.onSnapshot(msg); break;
       case 'progress': this.onProgress(msg.p); break;
-      case 'mode': this.mode = msg.m; break;
+      case 'mode': this.onMode(msg.m); break;
       case 'siege': this.siege = msg.s; break;
       case 'boards': this.boards.show(msg.boards, this.progress?.name ?? ''); break;
       case 'chat': this.chat.chat(msg.from, msg.text); break;
@@ -463,6 +472,14 @@ export class GameClient {
       this.journal.close();
       this.stable.open(this.progress);
     }
+  }
+
+  private onMode(m: ModeState | null): void {
+    const before = this.mode;
+    this.mode = m;
+    // A duel starting puts the opponent in your target frame.
+    if (m?.kind === 'duel' && m.phase === 'countdown' && !(before?.kind === 'duel' && before.phase === 'countdown')) this.setTarget(m.opponentId);
+    else this.setTarget(this.targetId);
   }
 
   private toggleBoards(): void {
@@ -598,6 +615,8 @@ export class GameClient {
   private setTarget(id: number | null): void {
     this.targetId = id;
     this.hud.setTarget(id !== null ? this.entities.get(id)?.state ?? null : null);
+    const state = id !== null ? this.entities.get(id)?.state : undefined;
+    byId('tDuel').hidden = this.options.offline || state?.k !== 'p' || this.mode !== null;
   }
 
   private cycleTarget(): void {
@@ -779,7 +798,7 @@ export class GameClient {
       strafe /= len;
       fwd /= len;
     }
-    const countdown = this.mode?.kind === 'race' && this.mode.phase === 'countdown';
+    const countdown = (this.mode?.kind === 'race' || this.mode?.kind === 'duel') && this.mode.phase === 'countdown';
     if (this.self?.dead || this.chat.isOpen || countdown) fwd = strafe = 0;
     return { fwd, strafe, yaw: this.cameraRig.yaw, jump: false, swim: this.jumpTouch || kb.isDown(' ') };
   }
@@ -867,8 +886,13 @@ export class GameClient {
       bearing = Math.atan2(dx * Math.cos(yaw) - dz * Math.sin(yaw), -dx * Math.sin(yaw) - dz * Math.cos(yaw));
     }
     const count = this.modeBar.update(this.mode, this.siege, this.clock.serverNow(this.now), bearing);
-    if (count !== null) this.notices.banner(count > 0 ? String(count) : 'Go!', count > 0 ? 'Ember Run' : 'Run!');
+    if (count !== null) {
+      const duelling = this.mode?.kind === 'duel';
+      this.notices.banner(count > 0 ? String(count) : duelling ? 'Fight!' : 'Go!', duelling ? 'Duel' : count > 0 ? 'Ember Run' : 'Run!');
+    }
     this.raceMarkers.update(this.mode?.kind === 'race' ? this.mode.next : null, this.now);
+    const duel = this.mode?.kind === 'duel' && (this.mode.phase === 'countdown' || this.mode.phase === 'fight') ? this.mode : null;
+    this.duelRing.update(this.generated?.world ?? null, duel?.x ?? 0, duel?.z ?? 0, duel ? duel.radius : null, this.now);
     const lit = this.siege?.phase === 'lost' ? 0 : 1;
     this.sky.townLit += (lit - this.sky.townLit) * Math.min(1, dt * 1.5);
   }

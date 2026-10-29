@@ -2,6 +2,7 @@ import { formatRaceTime, type ModeState, type SiegeState } from '@lanternwood/sh
 
 type RaceState = Extract<ModeState, { kind: 'race' }>;
 type RiftState = Extract<ModeState, { kind: 'rift' }>;
+type DuelState = Extract<ModeState, { kind: 'duel' }>;
 import { byId, setText } from './dom';
 
 /**
@@ -16,12 +17,14 @@ export class ModeBar {
   private readonly sub = byId('mbSub');
   private readonly arrow = byId('mbArrow');
   private readonly quit = byId('mbQuit');
+  private readonly accept = byId('mbAccept');
   private readonly meter = byId('mbMeter');
   private readonly fill = byId('mbFill');
   private lastCount = -1;
 
-  constructor(quit: () => void) {
+  constructor(quit: () => void, accept: () => void) {
     this.quit.addEventListener('click', quit);
+    this.accept.addEventListener('click', accept);
   }
 
   /**
@@ -34,11 +37,50 @@ export class ModeBar {
     document.body.classList.toggle('in-mode', shown);
     this.arrow.hidden = bearing === null;
     if (bearing !== null) this.arrow.style.transform = `rotate(${bearing.toFixed(3)}rad)`;
+    this.accept.hidden = mode?.kind !== 'duel' || mode.phase !== 'invited';
     if (mode?.kind === 'race') return this.showRace(mode, serverNow);
+    if (mode?.kind === 'duel') return this.showDuel(mode, serverNow);
     this.lastCount = -1;
     if (mode?.kind === 'rift') this.showRift(mode, serverNow);
     else if (siege) this.showSiege(siege, serverNow);
     return null;
+  }
+
+  private showDuel(s: DuelState, serverNow: number): number | null {
+    setText(this.title, 'Duel');
+    this.quit.hidden = false;
+    this.meter.hidden = true;
+    const left = Math.max(0, Math.ceil(s.endsAt - serverNow));
+    let count: number | null = null;
+    switch (s.phase) {
+      case 'invited':
+        setText(this.main, `${s.opponent} challenges you`);
+        setText(this.sub, `${left}s to answer · level-matched, nobody loses anything`);
+        setText(this.quit, 'Decline');
+        this.lastCount = -1;
+        break;
+      case 'challenging':
+        setText(this.main, `Waiting for ${s.opponent}`);
+        setText(this.sub, `${left}s`);
+        setText(this.quit, 'Cancel');
+        this.lastCount = -1;
+        break;
+      case 'countdown':
+        setText(this.main, left > 0 ? String(left) : 'Fight!');
+        setText(this.sub, `vs ${s.opponent}`);
+        setText(this.quit, 'Yield');
+        if (left !== this.lastCount) count = left;
+        this.lastCount = left;
+        break;
+      case 'fight':
+        setText(this.main, formatRaceTime(Math.max(0, s.endsAt - serverNow)).replace(/\.\d$/, ''));
+        setText(this.sub, `vs ${s.opponent} · stay in the ring`);
+        setText(this.quit, 'Yield');
+        if (this.lastCount !== 0) count = 0;
+        this.lastCount = 0;
+        break;
+    }
+    return count;
   }
 
   private showRift(s: RiftState, serverNow: number): void {

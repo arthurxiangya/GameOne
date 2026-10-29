@@ -124,4 +124,38 @@ describe('game server end to end', () => {
       b.close();
     }
   });
+
+  it('runs a duel between two heroes over the wire', async () => {
+    type ModeMsg = Extract<ServerMessage, { t: 'mode' }>;
+    const duelPhase = (phase: string) => (m: ServerMessage): m is ModeMsg => m.t === 'mode' && m.m?.kind === 'duel' && m.m.phase === phase;
+    const a = await connect(port);
+    const b = await connect(port);
+    try {
+      a.send({ t: 'hello', v: PROTOCOL_VERSION, token: token(1003), name: 'Cora' });
+      b.send({ t: 'hello', v: PROTOCOL_VERSION, token: token(1004), name: 'Dain' });
+      const welcomeA = await a.waitFor((m): m is Extract<ServerMessage, { t: 'welcome' }> => m.t === 'welcome');
+      const welcomeB = await b.waitFor((m): m is Extract<ServerMessage, { t: 'welcome' }> => m.t === 'welcome');
+
+      a.send({ t: 'duel', action: 'challenge', target: welcomeB.you });
+      const invite = await b.waitFor(duelPhase('invited'));
+      assert.equal(invite.m?.kind === 'duel' ? invite.m.opponentId : null, welcomeA.you);
+      await a.waitFor(duelPhase('challenging'));
+
+      b.send({ t: 'duel', action: 'accept' });
+      await a.waitFor(duelPhase('countdown'));
+      await b.waitFor(duelPhase('fight'), 6000);
+
+      // Cora yields, so Dain wins and both ratings move by 16 from 1,000.
+      const fightAt = b.messages.findIndex(duelPhase('fight'));
+      a.send({ t: 'quit' });
+      await b.waitFor((m): m is ModeMsg => m.t === 'mode' && m.m === null && b.messages.indexOf(m) > fightAt);
+      b.send({ t: 'boards' });
+      const boards = await b.waitFor((m): m is Extract<ServerMessage, { t: 'boards' }> => m.t === 'boards');
+      const duel = boards.boards.find((x) => x.id === 'duel');
+      assert.deepEqual(duel?.entries.map((e) => [e.name, e.value]), [['Dain', 1016], ['Cora', 984]]);
+    } finally {
+      a.close();
+      b.close();
+    }
+  });
 });

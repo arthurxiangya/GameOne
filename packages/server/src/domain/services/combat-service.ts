@@ -1,6 +1,7 @@
 import {
   BOLT_SPEED,
   CRIT_CHANCE,
+  DUEL,
   CRIT_MULTIPLIER,
   MEND_FRACTION,
   SIEGE,
@@ -30,11 +31,16 @@ export interface CombatWorld {
   skillBlocked(player: Player, skill: SkillId): string | null;
   /** A hero hit a monster (modes count damage and kills). */
   monsterHit(monster: Monster, attacker: Player | null, amount: number, killed: boolean): void;
+  /** The hero's duel opponent while the fight is on, or null. A duelist can hit only them. */
+  duelOpponent(player: Player): Player | null;
+  /** A duelist took a hit that would have dropped them: they yield, and the duel ends. */
+  duelDown(winner: Player, loser: Player): void;
 }
 
 interface PendingHit {
   remaining: number;
-  readonly monsterId: number;
+  readonly targetId: number;
+  readonly target: 'monster' | 'player';
   readonly attackerId: number;
   readonly amount: number;
   readonly crit: boolean;
@@ -85,8 +91,14 @@ export class CombatService {
       hit.remaining -= dt;
       if (hit.remaining > 0) continue;
       this.pendingHits.splice(i, 1);
-      const monster = this.world.monster(hit.monsterId);
-      if (monster?.alive) this.damageMonster(monster, hit.amount, hit.crit, this.world.player(hit.attackerId) ?? null);
+      const attacker = this.world.player(hit.attackerId) ?? null;
+      if (hit.target === 'player') {
+        const target = this.world.player(hit.targetId);
+        if (attacker && target && this.world.duelOpponent(attacker) === target) this.hitDuelist(attacker, target, hit.amount, hit.crit);
+        continue;
+      }
+      const monster = this.world.monster(hit.targetId);
+      if (monster?.alive) this.damageMonster(monster, hit.amount, hit.crit, attacker);
     }
   }
 
@@ -118,12 +130,45 @@ export class CombatService {
     }
   }
 
+  /** A duel hit: scaled down so fights last, and never below 1 health. */
+  private hitDuelist(attacker: Player, target: Player, amount: number, crit: boolean): void {
+    const amt = Math.max(1, Math.round(amount * DUEL.damageScale));
+    target.lastHurtAt = this.clock.now();
+    this.events.area(target.body.x, target.body.z, { e: 'dmg', id: target.id, amt, crit });
+    if (target.hp - amt <= 0) {
+      target.hp = 1;
+      this.world.duelDown(attacker, target);
+    } else {
+      target.hp -= amt;
+    }
+  }
+
+  /** The duel opponent if they are within `range` (from their body edge) and roughly level with you. */
+  private opponentInReach(player: Player, opponent: Player, range: number): boolean {
+    const gap = Math.hypot(opponent.body.x - player.body.x, opponent.body.z - player.body.z) - 0.3;
+    return gap <= range && Math.abs(opponent.body.y - player.body.y) <= VERTICAL_REACH;
+  }
+
+  private engagePlayer(player: Player, target: Player): void {
+    player.yaw = Math.atan2(target.body.x - player.body.x, target.body.z - player.body.z);
+    player.lastAttackAt = this.clock.now();
+    this.events.player(player.id, { e: 'target', id: target.id });
+  }
+
   // ------------------------------------------------------------------ skills
 
   private strike(player: Player, requested: number | null): Result {
     const def = SKILLS.strike;
     player.cooldowns.strike = def.cooldown;
     this.events.area(player.body.x, player.body.z, { e: 'swing', id: player.id });
+    const opponent = this.world.duelOpponent(player);
+    if (opponent) {
+      if (!this.opponentInReach(player, opponent, def.range)) return fail('Too far from your opponent.');
+      this.engagePlayer(player, opponent);
+      const roll = this.roll(player, def.power);
+      this.hitDuelist(player, opponent, roll.amount, roll.crit);
+      return ok();
+    }
     const target = this.resolveTarget(player, requested, def.range);
     if (!target) return fail(requested !== null ? 'Too far away. Walk closer or use Ember Bolt.' : 'Nothing in reach.');
     this.engage(player, target);
@@ -134,6 +179,19 @@ export class CombatService {
 
   private bolt(player: Player, requested: number | null): Result {
     const def = SKILLS.bolt;
+    const opponent = this.world.duelOpponent(player);
+    if (opponent) {
+      if (!this.opponentInReach(player, opponent, def.range)) return fail('Your opponent is out of range.');
+      this.engagePlayer(player, opponent);
+      player.mp -= def.mana;
+      player.cooldowns.bolt = def.cooldown;
+      const flight = Math.hypot(opponent.body.x - player.body.x, opponent.body.z - player.body.z) / BOLT_SPEED;
+      const roll = this.roll(player, def.power);
+      this.pendingHits.push({ remaining: flight, targetId: opponent.id, target: 'player', attackerId: player.id, amount: roll.amount, crit: roll.crit });
+      this.events.area(player.body.x, player.body.z, { e: 'cast', id: player.id });
+      this.events.area(player.body.x, player.body.z, { e: 'bolt', from: player.id, to: opponent.id, flight });
+      return ok();
+    }
     const target = this.resolveTarget(player, requested, def.range);
     if (!target) return fail('No target in range.');
     this.engage(player, target);
@@ -141,7 +199,7 @@ export class CombatService {
     player.cooldowns.bolt = def.cooldown;
     const flight = Math.hypot(target.x - player.body.x, target.z - player.body.z) / BOLT_SPEED;
     const roll = this.roll(player, def.power);
-    this.pendingHits.push({ remaining: flight, monsterId: target.id, attackerId: player.id, amount: roll.amount, crit: roll.crit });
+    this.pendingHits.push({ remaining: flight, targetId: target.id, target: 'monster', attackerId: player.id, amount: roll.amount, crit: roll.crit });
     this.events.area(player.body.x, player.body.z, { e: 'cast', id: player.id });
     this.events.area(player.body.x, player.body.z, { e: 'bolt', from: player.id, to: target.id, flight });
     return ok();
@@ -163,6 +221,14 @@ export class CombatService {
     player.cooldowns.ring = def.cooldown;
     player.lastAttackAt = this.clock.now();
     this.events.area(player.body.x, player.body.z, { e: 'ring', id: player.id, r: def.range });
+    const opponent = this.world.duelOpponent(player);
+    if (opponent) {
+      if (this.opponentInReach(player, opponent, def.range)) {
+        const roll = this.roll(player, def.power);
+        this.hitDuelist(player, opponent, roll.amount, roll.crit);
+      }
+      return ok();
+    }
     for (const m of this.world.monstersNear(player.body.x, player.body.z, def.range + 3)) {
       if (!m.alive || !sameFight(m, player.party) || Math.abs(m.y - player.body.y) > 3 || this.reach(player, m) > def.range) continue;
       const roll = this.roll(player, def.power);

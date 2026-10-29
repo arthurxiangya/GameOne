@@ -10,7 +10,7 @@ import { MAX_LEVEL, xpToNext } from './stats';
  * only ever carry ids.
  */
 
-export type BountyKind = 'hunt' | 'bigGame' | 'scout' | 'courier' | 'run' | 'defend' | 'delve';
+export type BountyKind = 'hunt' | 'bigGame' | 'scout' | 'courier' | 'run' | 'defend' | 'delve' | 'spar';
 export type BountySlot = 'fight' | 'explore' | 'mode';
 
 export interface BountyDef {
@@ -48,6 +48,9 @@ export function bountyFromId(id: string): BountyDef | null {
   if (id === 'defend') {
     return { ...base, id, kind: 'defend', slot: 'mode', title: 'Defend', need: 1, text: 'Take part in a Lantern Night (the Night Bell rings at dusk, every third night)' };
   }
+  if (id === 'spar') {
+    return { ...base, id, kind: 'spar', slot: 'mode', title: 'Spar', need: 1, text: 'Fight a duel, win or lose (select another hero and challenge them)' };
+  }
   if (id === 'delve') {
     return { ...base, id, kind: 'delve', slot: 'mode', title: 'Delve', need: 1, text: 'Reach wave 3 in a Rift Trial (Seer Ilka, level 6 and up)' };
   }
@@ -67,7 +70,7 @@ export function bountyFromId(id: string): BountyDef | null {
 }
 
 export interface BountyBoardOptions {
-  /** Whether duels exist here (online only). Reserved for the Spar bounty. */
+  /** Whether duels exist here (online only): the Spar bounty needs a second hero. */
   readonly duels: boolean;
 }
 
@@ -80,7 +83,7 @@ function scoutId(rng: RandomSource): string {
 }
 
 /** The ids of the three bounties posted on `day`, in slot order: fight, explore, mode. */
-export function bountiesForDay(seed: number, day: number, _options: BountyBoardOptions): readonly string[] {
+export function bountiesForDay(seed: number, day: number, options: BountyBoardOptions): readonly string[] {
   const rng = new Mulberry32((Math.imul(seed | 0, 0x9e3779b1) ^ Math.imul(day | 0, 0x85ebca6b)) | 0);
   // Warm up: nearby seeds give nearby first draws.
   for (let i = 0; i < 4; i++) rng.next();
@@ -88,7 +91,7 @@ export function bountiesForDay(seed: number, day: number, _options: BountyBoardO
   const exploreKinds = ['scout', 'courier', 'run'] as const;
   const exploreKind = pick(rng, exploreKinds);
   const explore = exploreKind === 'scout' ? scoutId(rng) : exploreKind;
-  const mode = pick(rng, ['defend', 'delve']);
+  const mode = pick(rng, options.duels ? ['defend', 'delve', 'spar'] : ['defend', 'delve']);
   return [fight, explore, mode];
 }
 
@@ -117,6 +120,8 @@ export function killCounts(kind: BountyKind, monsterLevel: number, heroLevel: nu
 export const runCounts = (kind: BountyKind): boolean => kind === 'run';
 /** Does taking part in a Lantern Night count for this bounty? */
 export const siegeCounts = (kind: BountyKind): boolean => kind === 'defend';
+/** Does fighting a duel count for this bounty? */
+export const duelCounts = (kind: BountyKind): boolean => kind === 'spar';
 /** Does reaching `wave` of a Rift Trial count for this bounty? */
 export const riftCounts = (kind: BountyKind, wave: number): boolean => kind === 'delve' && wave >= 3;
 

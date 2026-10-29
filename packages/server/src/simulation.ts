@@ -50,6 +50,7 @@ export function createSimulation({ config, repository, logger, time, hashToken, 
     dayLengthSeconds: config.dayLengthSeconds,
     calendar: { today: () => dayNumber(Date.parse(time.iso())), iso: () => time.iso() },
     boards: leaderboards,
+    duels: config.maxPlayers > 1,
   });
   const sessions = new SessionService({
     world,
