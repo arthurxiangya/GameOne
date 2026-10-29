@@ -14,7 +14,7 @@ import {
   type SkillId,
 } from '@lanternwood/shared';
 import type { AchievementSink } from '../achievements';
-import type { Monster } from '../entities/monster';
+import { sameFight, type Monster } from '../entities/monster';
 import type { Player } from '../entities/player';
 import type { EventSink } from '../events';
 import type { Clock } from '../ports';
@@ -164,7 +164,7 @@ export class CombatService {
     player.lastAttackAt = this.clock.now();
     this.events.area(player.body.x, player.body.z, { e: 'ring', id: player.id, r: def.range });
     for (const m of this.world.monstersNear(player.body.x, player.body.z, def.range + 3)) {
-      if (!m.alive || Math.abs(m.y - player.body.y) > 3 || this.reach(player, m) > def.range) continue;
+      if (!m.alive || !sameFight(m, player.party) || Math.abs(m.y - player.body.y) > 3 || this.reach(player, m) > def.range) continue;
       const roll = this.roll(player, def.power);
       this.damageMonster(m, roll.amount, roll.crit, player);
     }
@@ -217,7 +217,9 @@ export class CombatService {
   }
 
   private resolveTarget(player: Player, requested: number | null, range: number): Monster | null {
-    const preferred = requested !== null ? this.world.monster(requested) : undefined;
+    const asked = requested !== null ? this.world.monster(requested) : undefined;
+    // Someone else's rift fight is not yours to join.
+    const preferred = asked && sameFight(asked, player.party) ? asked : undefined;
     if (preferred?.alive && this.reach(player, preferred) <= range && Math.abs(preferred.y - player.body.y) <= VERTICAL_REACH) {
       return preferred;
     }
@@ -227,7 +229,7 @@ export class CombatService {
     const fx = Math.sin(player.yaw);
     const fz = Math.cos(player.yaw);
     for (const m of this.world.monstersNear(player.body.x, player.body.z, range + 3)) {
-      if (!m.alive || Math.abs(m.y - player.body.y) > VERTICAL_REACH) continue;
+      if (!m.alive || !sameFight(m, player.party) || Math.abs(m.y - player.body.y) > VERTICAL_REACH) continue;
       const gap = this.reach(player, m);
       if (gap > range) continue;
       const dx = m.x - player.body.x;

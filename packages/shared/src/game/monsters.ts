@@ -1,4 +1,4 @@
-export type MonsterType = 'puffcap' | 'toad' | 'boar' | 'scuttler' | 'golem' | 'warden' | 'wisp' | 'shade' | 'gloomknight';
+export type MonsterType = 'puffcap' | 'toad' | 'boar' | 'scuttler' | 'golem' | 'warden' | 'wisp' | 'shade' | 'gloomknight' | 'riftlord';
 
 export interface MonsterDef {
   readonly name: string;
@@ -60,6 +60,11 @@ export const MONSTERS: Readonly<Record<MonsterType, MonsterDef>> = {
   gloomknight: {
     name: 'Gloom Knight', speed: 2.9, reach: 2.2, radius: 1.4, height: 2.6, passive: false, boss: true,
     scale: 1.7, aggroRange: 14, leash: 500, attackInterval: 2.0, windup: 0.4, respawnSeconds: 0,
+  },
+  // Rift Trials only.
+  riftlord: {
+    name: 'Rift Lord', speed: 2.6, reach: 2.2, radius: 1.6, height: 2.4, passive: false, boss: true,
+    scale: 1.8, aggroRange: 20, leash: 500, attackInterval: 2.1, windup: 0.4, respawnSeconds: 0,
   },
 };
 

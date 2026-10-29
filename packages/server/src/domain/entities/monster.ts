@@ -11,7 +11,14 @@ export interface MonsterOptions {
   readonly goal?: { readonly x: number; readonly z: number };
   /** Ignores heroes entirely and only attacks its goal. */
   readonly goalOnly?: boolean;
+  /** Belongs to one party's fight (a rift): only that party can hit it, and it only attacks them. */
+  readonly party?: number;
+  /** Attacks on sight, from this far, even if its kind is normally passive. */
+  readonly huntRange?: number;
 }
+
+/** Whether a monster and a hero are in the same fight: rift monsters only fight their own party. */
+export const sameFight = (m: Monster, party: number | null): boolean => m.party === null || m.party === party;
 
 export type MonsterMode = 'idle' | 'chase' | 'return' | 'dead';
 
@@ -30,6 +37,10 @@ export class Monster {
   readonly transient: boolean;
   readonly goal: { readonly x: number; readonly z: number } | null;
   readonly goalOnly: boolean;
+  readonly party: number | null;
+  /** Whether it only fights back (from its kind, unless a mode made it hunt). */
+  readonly passive: boolean;
+  readonly aggroRange: number;
   x: number;
   y: number;
   z: number;
@@ -67,6 +78,9 @@ export class Monster {
     this.transient = options.transient ?? false;
     this.goal = options.goal ?? null;
     this.goalOnly = options.goalOnly ?? false;
+    this.party = options.party ?? null;
+    this.passive = options.huntRange !== undefined ? false : this.def.passive;
+    this.aggroRange = options.huntRange ?? this.def.aggroRange;
     this.hp = this.maxHp;
     this.x = spawnX;
     this.y = spawnY;

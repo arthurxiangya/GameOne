@@ -77,7 +77,8 @@ describe('Ember Run', () => {
     startRun(world, hero);
     runTicks(world, Math.ceil(RACE_COUNTDOWN / SIM_DT) + 1);
     runCourse(world, hero, 5, 3);
-    assert.equal(world.modeStatus(hero)?.next, 3, 'still waiting for the skipped checkpoint');
+    const status = world.modeStatus(hero);
+    assert.equal(status?.kind === 'race' && status.next, 3, 'still waiting for the skipped checkpoint');
     assert.equal(hero.progress.records.raceBest, null);
   });
 

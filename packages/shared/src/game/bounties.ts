@@ -10,7 +10,7 @@ import { MAX_LEVEL, xpToNext } from './stats';
  * only ever carry ids.
  */
 
-export type BountyKind = 'hunt' | 'bigGame' | 'scout' | 'courier' | 'run' | 'defend';
+export type BountyKind = 'hunt' | 'bigGame' | 'scout' | 'courier' | 'run' | 'defend' | 'delve';
 export type BountySlot = 'fight' | 'explore' | 'mode';
 
 export interface BountyDef {
@@ -47,6 +47,9 @@ export function bountyFromId(id: string): BountyDef | null {
   }
   if (id === 'defend') {
     return { ...base, id, kind: 'defend', slot: 'mode', title: 'Defend', need: 1, text: 'Take part in a Lantern Night (the Night Bell rings at dusk, every third night)' };
+  }
+  if (id === 'delve') {
+    return { ...base, id, kind: 'delve', slot: 'mode', title: 'Delve', need: 1, text: 'Reach wave 3 in a Rift Trial (Seer Ilka, level 6 and up)' };
   }
   if (id === 'run') {
     return { ...base, id, kind: 'run', slot: 'explore', title: 'Run', need: 1, text: 'Finish an Ember Run (Pip the Runner, Emberhold)' };
@@ -85,7 +88,7 @@ export function bountiesForDay(seed: number, day: number, _options: BountyBoardO
   const exploreKinds = ['scout', 'courier', 'run'] as const;
   const exploreKind = pick(rng, exploreKinds);
   const explore = exploreKind === 'scout' ? scoutId(rng) : exploreKind;
-  const mode = pick(rng, ['defend']);
+  const mode = pick(rng, ['defend', 'delve']);
   return [fight, explore, mode];
 }
 
@@ -114,6 +117,8 @@ export function killCounts(kind: BountyKind, monsterLevel: number, heroLevel: nu
 export const runCounts = (kind: BountyKind): boolean => kind === 'run';
 /** Does taking part in a Lantern Night count for this bounty? */
 export const siegeCounts = (kind: BountyKind): boolean => kind === 'defend';
+/** Does reaching `wave` of a Rift Trial count for this bounty? */
+export const riftCounts = (kind: BountyKind, wave: number): boolean => kind === 'delve' && wave >= 3;
 
 /** How far along a bounty is, from the counters and the places and people seen today. */
 export function bountyCount(def: BountyDef, count: number, seen: readonly string[]): number {

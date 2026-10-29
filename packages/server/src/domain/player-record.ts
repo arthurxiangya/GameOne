@@ -132,6 +132,8 @@ function parseRecords(v: unknown): HeroRecords {
   if (typeof v.raceBest === 'number' && Number.isFinite(v.raceBest) && v.raceBest > 0) records.raceBest = v.raceBest;
   if (Number.isInteger(v.raceDay)) records.raceDay = v.raceDay as number;
   if (intIn(v.nightsWon, 0, 1e6)) records.nightsWon = v.nightsWon;
+  if (intIn(v.riftBest, 0, 1e7)) records.riftBest = v.riftBest;
+  if (Number.isInteger(v.riftLordDay)) records.riftLordDay = v.riftLordDay as number;
   return records;
 }
 

@@ -51,7 +51,11 @@ export interface ModeHost {
   /** Time of day in [0, 1). */
   timeOfDay(): number;
   players(): Iterable<Player>;
+  /** Whether a hero is already taken up by any mode (a run, a rift). */
+  busy(player: Player): boolean;
   teleport(player: Player, to: Readonly<Vec3>): void;
+  /** Back to the plaza in Emberhold. */
+  sendHome(player: Player): void;
   /** The hero's mode state changed; their client is told after this tick. */
   modeChanged(player: Player): void;
   spawnMonster(type: MonsterType, level: number, x: number, z: number, options: MonsterOptions): Monster;

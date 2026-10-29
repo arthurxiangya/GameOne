@@ -37,8 +37,29 @@ describe('buildChunkMesh', () => {
     }
   });
 
-  it('returns empty buffers for chunks past the island edge', () => {
-    const mesh = buildChunkMesh(world, 0, 0);
-    assert.equal(mesh.solid.vertexCount, 0);
+  it('returns empty buffers for chunks with nothing in them', () => {
+    const size = 16;
+    const empty = (cx: number, cz: number): boolean => {
+      for (let x = 0; x < size; x++) {
+        for (let z = 0; z < size; z++) {
+          const c = world.column(world.minX + cx * size + x, world.minZ + cz * size + z);
+          if (world.colLo[c]! <= world.colHi[c]!) return false;
+        }
+      }
+      return true;
+    };
+    let found = false;
+    for (let cx = 0; cx < world.chunksX && !found; cx++) {
+      for (let cz = 0; cz < world.chunksZ && !found; cz++) {
+        if (!empty(cx, cz)) continue;
+        found = true;
+        assert.equal(buildChunkMesh(world, cx, cz).solid.vertexCount, 0);
+      }
+    }
+    assert.ok(found, 'some chunk past the island edge is empty');
+  });
+
+  it('builds the floating rift islands in the corners', () => {
+    assert.ok(buildChunkMesh(world, 0, 0).solid.vertexCount > 0);
   });
 });

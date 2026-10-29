@@ -1,15 +1,15 @@
 export type NpcId = 'maren' | 'oda' | 'rook' | 'ilka' | 'pip' | 'tamsin' | 'bryn' | 'sefa';
 
 /** What a character offers besides story: Oda's forge and Mark trades, Rook's bounty board. */
-export type NpcService = 'forge' | 'marks' | 'bounties' | 'race';
+export type NpcService = 'forge' | 'marks' | 'bounties' | 'race' | 'rift';
 
 /**
  * Everything a hero can do with a character. `greet` opens a conversation (it counts for
  * bounties that ask you to visit people); the story actions name a chain, `buy` names an item.
  */
-export type NpcAction = 'greet' | 'accept' | 'turnIn' | 'talk' | 'buyTonic' | 'sharpen' | 'buy' | 'race';
+export type NpcAction = 'greet' | 'accept' | 'turnIn' | 'talk' | 'buyTonic' | 'sharpen' | 'buy' | 'race' | 'rift';
 
-export const NPC_ACTIONS: readonly NpcAction[] = ['greet', 'accept', 'turnIn', 'talk', 'buyTonic', 'sharpen', 'buy', 'race'];
+export const NPC_ACTIONS: readonly NpcAction[] = ['greet', 'accept', 'turnIn', 'talk', 'buyTonic', 'sharpen', 'buy', 'race', 'rift'];
 
 /** Actions that belong to a service only that service's characters provide. */
 export const ACTION_SERVICE: Readonly<Partial<Record<NpcAction, NpcService>>> = {
@@ -17,6 +17,7 @@ export const ACTION_SERVICE: Readonly<Partial<Record<NpcAction, NpcService>>> = 
   sharpen: 'forge',
   buy: 'marks',
   race: 'race',
+  rift: 'rift',
 };
 
 export interface NpcDef {
@@ -56,8 +57,8 @@ export const NPC_PLACEMENTS: readonly NpcPlacement[] = [
     idle: 'Three bounties a day, posted at midnight. Keep the roads safe and the Watch pays.',
   },
   {
-    id: 'ilka', name: 'Seer Ilka', role: 'Seer', x: -4.4, z: -9.4, yaw: Math.PI / 2, services: [], snap: false,
-    idle: 'The sky is thin past the southern cliffs. I can feel it from here.',
+    id: 'ilka', name: 'Seer Ilka', role: 'Keeper of the rift stones', x: -12.6, z: -3.4, yaw: -2.1, services: ['rift'], snap: false,
+    idle: 'The sky is thin past the cliffs. Stand in the stone circle and I can open a way through.',
   },
   {
     id: 'pip', name: 'Pip the Runner', role: 'Keeper of the Ember Run', x: 3.4, z: 13, yaw: -Math.PI / 2, services: ['race'], snap: false,
