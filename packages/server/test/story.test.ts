@@ -61,11 +61,13 @@ describe('story chains', () => {
 
     const marks = hero.progress.marks;
     assert.ok(talkTo(world, hero, 'tamsin', 'talk', 'bell').ok);
-    assert.equal(story.bell.step, chainById('bell').steps.length);
+    assert.equal(story.bell.step, 4);
+    assert.equal(story.bell.state, 'active', 'the last beat waits for a Lantern Night');
+    assert.equal(chainById('bell').steps[4]?.objective.kind, 'event');
     assert.equal(hero.progress.marks, marks + 2);
     assert.deepEqual(hero.progress.titles, ['bellfinder']);
     assert.equal(hero.progress.title, 'bellfinder', 'the first title earned is shown');
-    assert.equal(talkTo(world, hero, 'tamsin', 'accept', 'bell').ok, false, 'a finished story stays finished');
+    assert.equal(talkTo(world, hero, 'tamsin', 'accept', 'bell').ok, false, 'nothing to accept again');
     assert.ok(world.drainEvents().some((r) => r.event.e === 'story'));
   });
 

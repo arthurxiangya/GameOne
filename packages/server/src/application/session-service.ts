@@ -140,6 +140,8 @@ export class SessionService {
   /** Called after every simulation step. */
   afterTick(): void {
     this.routeEvents(this.deps.world.drainEvents());
+    const siege = this.deps.world.takeSiegeUpdate();
+    if (siege !== undefined) for (const session of this.byPlayer.values()) this.send(session, { t: 'siege', s: siege });
     const sendSnapshots = this.deps.world.tick % this.deps.options.snapshotEveryTicks === 0;
     for (const session of this.byPlayer.values()) {
       const player = session.player;
@@ -291,6 +293,8 @@ export class SessionService {
       dayLength: options.dayLengthSeconds,
     });
     player.progressDirty = false;
+    const siege = world.siegeStatus();
+    if (siege) this.send(session, { t: 'siege', s: siege });
     this.broadcastSystem(`${player.name} entered the realm.`, session);
     this.deps.logger.info('player joined', { player: player.id, account: accountId.slice(0, 8), name: player.name, online: this.byPlayer.size });
   }

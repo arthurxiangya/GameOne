@@ -18,6 +18,10 @@ The load test starts a fresh server, connects N bots (all in the one shared real
 
 The Render free plan has 0.1 CPU, a tenth of one core, so expect roughly 20 players there before ticks run late. That's fine for testing with friends; use a paid instance for anything bigger.
 
+## Lantern Night
+
+A siege adds monsters near town: the largest wave sends at most 40, whatever the crowd (`SIEGE.maxPerWave`), so a siege adds at most about 40 entities to every defender's view. Pets add no entities (each client draws them), and mounts change nothing on the network. Re-run the load test with a siege on before raising the player cap.
+
 ## Can it hold 10,000 players at once?
 
 **No, not as built, and no single server process could.** With everyone visible to everyone, 10,000 players would mean about 10,000 × 10,000 × 20 = 2 billion entity updates per second. Real MMOs reach tens of thousands by never letting everyone see everyone, and by spreading players over many processes and machines. Getting there:

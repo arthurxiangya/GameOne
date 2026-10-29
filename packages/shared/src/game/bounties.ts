@@ -10,7 +10,7 @@ import { MAX_LEVEL, xpToNext } from './stats';
  * only ever carry ids.
  */
 
-export type BountyKind = 'hunt' | 'bigGame' | 'scout' | 'courier' | 'run';
+export type BountyKind = 'hunt' | 'bigGame' | 'scout' | 'courier' | 'run' | 'defend';
 export type BountySlot = 'fight' | 'explore' | 'mode';
 
 export interface BountyDef {
@@ -44,6 +44,9 @@ export function bountyFromId(id: string): BountyDef | null {
   }
   if (id === 'bigGame') {
     return { ...base, id, kind: 'bigGame', slot: 'fight', title: 'Big game', need: 3, text: 'Defeat 3 monsters above your level' };
+  }
+  if (id === 'defend') {
+    return { ...base, id, kind: 'defend', slot: 'mode', title: 'Defend', need: 1, text: 'Take part in a Lantern Night (the Night Bell rings at dusk, every third night)' };
   }
   if (id === 'run') {
     return { ...base, id, kind: 'run', slot: 'explore', title: 'Run', need: 1, text: 'Finish an Ember Run (Pip the Runner, Emberhold)' };
@@ -82,12 +85,8 @@ export function bountiesForDay(seed: number, day: number, _options: BountyBoardO
   const exploreKinds = ['scout', 'courier', 'run'] as const;
   const exploreKind = pick(rng, exploreKinds);
   const explore = exploreKind === 'scout' ? scoutId(rng) : exploreKind;
-  // Until a mode has a bounty of its own, the third slot repeats a kind not already posted.
-  const spare = [
-    fight === 'hunt' ? 'bigGame' : 'hunt',
-    ...exploreKinds.filter((k) => k !== exploreKind).map((k) => (k === 'scout' ? scoutId(rng) : k)),
-  ];
-  return [fight, explore, pick(rng, spare)];
+  const mode = pick(rng, ['defend']);
+  return [fight, explore, mode];
 }
 
 // ---------------------------------------------------------------- progress
@@ -113,6 +112,8 @@ export function killCounts(kind: BountyKind, monsterLevel: number, heroLevel: nu
 
 /** Does finishing an Ember Run count for this bounty? */
 export const runCounts = (kind: BountyKind): boolean => kind === 'run';
+/** Does taking part in a Lantern Night count for this bounty? */
+export const siegeCounts = (kind: BountyKind): boolean => kind === 'defend';
 
 /** How far along a bounty is, from the counters and the places and people seen today. */
 export function bountyCount(def: BountyDef, count: number, seen: readonly string[]): number {

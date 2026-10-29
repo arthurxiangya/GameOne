@@ -1,4 +1,4 @@
-export type MonsterType = 'puffcap' | 'toad' | 'boar' | 'scuttler' | 'golem' | 'warden';
+export type MonsterType = 'puffcap' | 'toad' | 'boar' | 'scuttler' | 'golem' | 'warden' | 'wisp' | 'shade' | 'gloomknight';
 
 export interface MonsterDef {
   readonly name: string;
@@ -47,6 +47,19 @@ export const MONSTERS: Readonly<Record<MonsterType, MonsterDef>> = {
   warden: {
     name: 'Warden of the Frost Heart', speed: 2.7, reach: 2.2, radius: 2.0, height: 2.4, passive: false, boss: true,
     scale: 2.1, aggroRange: 13, leash: 20, attackInterval: 2.2, windup: 0.38, respawnSeconds: 90,
+  },
+  // The Gloom: Lantern Night only. They are spawned by the siege, march on the Great Lantern and never respawn.
+  wisp: {
+    name: 'Gloom Wisp', speed: 4.2, reach: 1.2, radius: 0.45, height: 1.4, passive: true, boss: false, scale: null,
+    aggroRange: 0, leash: 500, attackInterval: 1.4, windup: 0.3, respawnSeconds: 0,
+  },
+  shade: {
+    name: 'Shade Stalker', speed: 3.6, reach: 1.5, radius: 0.6, height: 1.9, passive: false, boss: false, scale: null,
+    aggroRange: 12, leash: 500, attackInterval: 1.5, windup: 0.38, respawnSeconds: 0,
+  },
+  gloomknight: {
+    name: 'Gloom Knight', speed: 2.9, reach: 2.2, radius: 1.4, height: 2.6, passive: false, boss: true,
+    scale: 1.7, aggroRange: 14, leash: 500, attackInterval: 2.0, windup: 0.4, respawnSeconds: 0,
   },
 };
 

@@ -2,6 +2,7 @@ import type { Board } from '../game/leaderboards';
 import type { MonsterType } from '../game/monsters';
 import type { MountId } from '../game/mounts';
 import type { PetId } from '../game/pets';
+import type { SiegeState } from '../game/siege';
 import type { NpcAction, NpcId } from '../game/npcs';
 import type { PlayerProgress } from '../game/progress';
 import type { SkillId } from '../game/skills';
@@ -194,6 +195,8 @@ export type ServerMessage =
   /** Your mode state changed (null: not in a mode). */
   | { readonly t: 'mode'; readonly m: ModeState | null }
   | { readonly t: 'boards'; readonly boards: readonly Board[] }
+  /** Lantern Night, to everyone: the current siege, or null when there is none. */
+  | { readonly t: 'siege'; readonly s: SiegeState | null }
   | { readonly t: 'chat'; readonly from: string; readonly text: string }
   | { readonly t: 'system'; readonly text: string }
   | { readonly t: 'error'; readonly reason: string }

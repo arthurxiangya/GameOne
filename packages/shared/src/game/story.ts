@@ -20,7 +20,12 @@ export type Objective =
   | { readonly kind: 'defeat'; readonly monster: MonsterType; readonly count: number }
   | { readonly kind: 'collect'; readonly monster: MonsterType; readonly count: number; readonly item: string }
   | { readonly kind: 'visit'; readonly place: LandmarkId }
-  | { readonly kind: 'talk'; readonly npc: NpcId };
+  | { readonly kind: 'talk'; readonly npc: NpcId }
+  /** Something that happens in a game mode, such as defending Emberhold through a Lantern Night. */
+  | { readonly kind: 'event'; readonly event: StoryEvent; readonly text: string };
+
+/** Mode outcomes that story steps can wait for. */
+export type StoryEvent = 'siege' | 'gloomKnight';
 
 export interface StepReward {
   readonly xp: number;
@@ -151,6 +156,13 @@ const BELL: StoryChain = {
       remind: 'Go back to Tamsin on the Reedmere road.',
       done: 'The Gloom? Then Reedmere will keep its lamps burning, and so will you. Take my grandmother’s charm. They called her the Bellfinder too.',
     },
+    {
+      title: 'When the Bell Rings', objective: { kind: 'event', event: 'siege', text: 'Defend Emberhold through a Lantern Night' }, accept: false, turnIn: 'tamsin',
+      where: 'Emberhold · when the Night Bell rings at dusk', reward: { xp: 300, gold: 60, marks: 2 },
+      offer: 'The bell will ring again. When it does, be at the Great Lantern.',
+      remind: 'Every third night the Night Bell rings at dusk and the Gloom marches on Emberhold. Defend the Great Lantern, then come back to me.',
+      done: 'I heard the bell from the shore, and then I saw the light hold. You were there, weren’t you? Reedmere will not forget it.',
+    },
   ],
 };
 
@@ -194,6 +206,13 @@ const THIEF: StoryChain = {
       offer: 'Bryn needs to know.',
       remind: 'Tell Ranger Bryn what Oda said.',
       done: 'Gloom ash. Then it is not poachers. Keep your eyes open after dark, keeper. You have earned the name Shrinekeeper, and take Bramble here. She was the calmest hog in the woods, and she has taken a liking to you.',
+    },
+    {
+      title: 'Catch the Thief', objective: { kind: 'event', event: 'gloomKnight', text: 'Defeat the Gloom Knight on a Lantern Night' }, accept: false, turnIn: 'bryn',
+      where: 'Emberhold · the last wave of a Lantern Night', reward: { xp: 450, gold: 80, marks: 3 },
+      offer: 'Whatever steals the shrine flames will come for the Great Lantern itself.',
+      remind: 'The thief leads the last wave of a Lantern Night: the Gloom Knight. Help defeat it, then tell me.',
+      done: 'The Gloom Knight, wearing our shrine flames like a crown. And you put it out. The woods are yours whenever you want them, keeper.',
     },
   ],
 };
@@ -292,5 +311,7 @@ export function objectiveText(o: Objective, progress: number): string {
       return `Find ${LANDMARK_NAMES[o.place]}`;
     case 'talk':
       return `Talk to ${npcName(o.npc)}`;
+    case 'event':
+      return o.text;
   }
 }

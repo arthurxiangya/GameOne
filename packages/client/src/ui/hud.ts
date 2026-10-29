@@ -95,7 +95,7 @@ export class Hud {
     const isMonster = target.k === 'm';
     setText(this.targetName, isMonster ? MONSTERS[target.ty].name : target.nm);
     this.targetFrame.classList.toggle('ally', !isMonster);
-    this.targetFrame.classList.toggle('boss', isMonster && target.ty === 'warden');
+    this.targetFrame.classList.toggle('boss', isMonster && MONSTERS[target.ty].boss);
     setText(this.targetLevel, String(target.lv));
     this.targetFill.style.transform = `scaleX(${(Math.max(0, target.hp) / target.mhp).toFixed(3)})`;
     setText(this.targetText, `${Math.max(0, target.hp)} / ${target.mhp}`);
