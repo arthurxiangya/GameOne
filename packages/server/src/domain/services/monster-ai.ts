@@ -9,6 +9,8 @@ export interface AiWorld {
   surfaceY(x: number, z: number): number;
   player(id: number): Player | undefined;
   playersNear(x: number, z: number, radius: number): readonly Player[];
+  /** Heroes monsters leave alone, such as runners on the Ember Run. */
+  ignoredByMonsters(player: Player): boolean;
 }
 
 const MAX_CLIMB = 1.6;
@@ -61,7 +63,7 @@ export class MonsterAi {
       let nearest: Player | null = null;
       let nearestDistance = Number.POSITIVE_INFINITY;
       for (const p of this.world.playersNear(m.x, m.z, m.def.aggroRange)) {
-        if (p.dead || Math.abs(p.body.y - m.y) > 5 || p.level >= m.level + IGNORE_LEVEL_GAP) continue;
+        if (p.dead || Math.abs(p.body.y - m.y) > 5 || p.level >= m.level + IGNORE_LEVEL_GAP || this.world.ignoredByMonsters(p)) continue;
         const d = Math.hypot(p.body.x - m.x, p.body.z - m.z);
         if (d < nearestDistance) {
           nearestDistance = d;
@@ -79,7 +81,7 @@ export class MonsterAi {
     let topThreat = Number.NEGATIVE_INFINITY;
     for (const [id, threat] of m.threat) {
       const p = this.world.player(id);
-      if (!p || p.dead || Math.hypot(p.body.x - m.x, p.body.z - m.z) > m.def.leash + 12) {
+      if (!p || p.dead || Math.hypot(p.body.x - m.x, p.body.z - m.z) > m.def.leash + 12 || this.world.ignoredByMonsters(p)) {
         m.threat.delete(id);
         continue;
       }

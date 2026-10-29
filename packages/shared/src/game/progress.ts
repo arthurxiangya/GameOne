@@ -28,7 +28,18 @@ export interface PlayerProgress {
   /** The pet that follows the hero. */
   pet: PetId | null;
   eggs: EggState[];
+  records: HeroRecords;
 }
+
+/** Personal bests and once-a-day reward markers for the game modes. */
+export interface HeroRecords {
+  /** Best Ember Run time in seconds. */
+  raceBest: number | null;
+  /** Day of the last Ember Run medal reward. */
+  raceDay: number;
+}
+
+export const newRecords = (): HeroRecords => ({ raceBest: null, raceDay: -1 });
 
 export const newProgress = (name: string): PlayerProgress => ({
   name,
@@ -48,6 +59,7 @@ export const newProgress = (name: string): PlayerProgress => ({
   pets: [],
   pet: null,
   eggs: [],
+  records: newRecords(),
 });
 
 /** A deep copy, for sending: the server keeps mutating its own. */
@@ -59,4 +71,5 @@ export const cloneProgress = (p: PlayerProgress): PlayerProgress => ({
   mounts: [...p.mounts],
   pets: p.pets.map((x) => ({ ...x })),
   eggs: p.eggs.map((x) => ({ ...x })),
+  records: { ...p.records },
 });

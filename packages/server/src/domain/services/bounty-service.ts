@@ -6,6 +6,7 @@ import {
   bountyGold,
   bountyXp,
   killCounts,
+  runCounts,
   type BountyDef,
 } from '@lanternwood/shared';
 import type { Achievement } from '../achievements';
@@ -43,9 +44,10 @@ export class BountyService {
     const b = player.progress.bounties;
     const defs = b.ids.map(bountyFromId);
     const before = defs.map((def, i) => (def ? bountyCount(def, b.counts[i] ?? 0, b.seen) : 0));
-    if (a.kind === 'kill') {
+    if (a.kind === 'kill' || a.kind === 'race') {
       defs.forEach((def, i) => {
-        if (!def || b.done[i] || !killCounts(def.kind, a.level, player.level)) return;
+        if (!def || b.done[i]) return;
+        if (a.kind === 'kill' ? !killCounts(def.kind, a.level, player.level) : !runCounts(def.kind)) return;
         b.counts[i] = (b.counts[i] ?? 0) + 1;
         player.touchProgress();
       });

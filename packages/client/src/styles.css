@@ -249,6 +249,25 @@ body.touch .log { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); width:
 .castbar .meter i { background: var(--lantern); transition: none; }
 body.riding #rideBtn { background: var(--lantern); color: var(--night); }
 
+/* mode bar */
+.modebar { top: calc(12px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); min-width: 200px; padding: 8px 14px 10px; display: grid; justify-items: center; gap: 2px; text-align: center; z-index: 3; }
+.mb-k { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--lantern); }
+.mb-main { font: 400 26px/1.1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+.mb-sub { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink); }
+.mb-arrow { width: 16px; height: 16px; color: var(--lantern); }
+.mb-quit { margin-top: 4px; min-height: 30px; padding: 0 10px; font-size: 11px; }
+@media (max-width: 720px) {
+  /* The top of a phone screen is taken by the hero frame and the map: sit above the skill buttons instead. */
+  .modebar { top: auto; bottom: calc(222px + env(safe-area-inset-bottom, 0px)); min-width: 150px; padding: 6px 12px 8px; }
+  .mb-main { font-size: 20px; }
+}
+.board { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; counter-reset: place; }
+.board li { counter-increment: place; display: grid; grid-template-columns: 24px 1fr auto; gap: 8px; align-items: baseline; padding: 6px 10px; border-radius: 8px; background: var(--shade); font-size: 12px; }
+.board li::before { content: counter(place); color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.board li.you { outline: 1px solid var(--lantern); }
+.board .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board b { font-variant-numeric: tabular-nums; color: var(--lantern); }
+
 /* journal */
 .journal { width: min(440px, calc(100vw - 24px)); max-height: min(82vh, 640px); }
 .j-head { display: flex; align-items: center; gap: 8px; }

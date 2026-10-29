@@ -24,6 +24,8 @@ export * from './game/bounties';
 export * from './game/titles';
 export * from './game/mounts';
 export * from './game/pets';
+export * from './game/race';
+export * from './game/leaderboards';
 export * from './game/npcs';
 export * from './game/economy';
 export * from './game/progress';

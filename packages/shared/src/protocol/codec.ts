@@ -12,9 +12,10 @@ export function decodeJson(text: string, maxBytes: number): unknown {
   }
 }
 
-const SERVER_TYPES: ReadonlySet<ServerMessageType> = new Set<ServerMessageType>([
-  'welcome', 'reject', 'snapshot', 'progress', 'chat', 'system', 'error', 'pong',
-]);
+/** Every server message type. A Record, so adding a type without listing it here fails to compile. */
+const SERVER_TYPES: Readonly<Record<ServerMessageType, true>> = {
+  welcome: true, reject: true, snapshot: true, progress: true, mode: true, boards: true, chat: true, system: true, error: true, pong: true,
+};
 
 /**
  * Light structural check for messages from the (trusted) server. The client only
@@ -24,5 +25,5 @@ export function decodeServerMessage(text: string): ServerMessage | null {
   const data = decodeJson(text, 4 * 1024 * 1024);
   if (typeof data !== 'object' || data === null) return null;
   const t = (data as { t?: unknown }).t;
-  return typeof t === 'string' && SERVER_TYPES.has(t as ServerMessageType) ? (data as ServerMessage) : null;
+  return typeof t === 'string' && Object.hasOwn(SERVER_TYPES, t) ? (data as ServerMessage) : null;
 }

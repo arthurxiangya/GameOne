@@ -1,8 +1,10 @@
 import { Mulberry32, dayNumber, generateWorld, type GeneratedWorld } from '@lanternwood/shared';
 import { GameWorld } from './application/game-world';
+import { Leaderboards } from './application/leaderboards';
 import type { Logger, SystemTime, TokenHasher } from './application/ports';
 import { SessionService } from './application/session-service';
-import type { PlayerRepository } from './domain/ports';
+import type { LeaderboardRepository, PlayerRepository } from './domain/ports';
+import { InMemoryLeaderboardRepository } from './infrastructure/persistence/in-memory-leaderboard-repository';
 import { FixedStepLoop } from './infrastructure/scheduling/fixed-step-loop';
 
 export interface SimulationConfig {
@@ -20,6 +22,8 @@ export interface SimulationDependencies {
   readonly logger: Logger;
   readonly time: SystemTime;
   readonly hashToken: TokenHasher;
+  /** Where leaderboards are kept. Defaults to memory. */
+  readonly boards?: LeaderboardRepository;
   /** Reuse an already generated realm instead of generating it from the seed again. */
   readonly generated?: GeneratedWorld;
 }
@@ -28,6 +32,7 @@ export interface Simulation {
   readonly world: GameWorld;
   readonly sessions: SessionService;
   readonly loop: FixedStepLoop;
+  readonly leaderboards: Leaderboards;
 }
 
 /**
@@ -35,17 +40,21 @@ export interface Simulation {
  * fixed-step loop that drives them. Contains no Node APIs, so the online server (app.ts) and
  * the in-browser single-player server (embedded.ts) are built from exactly the same parts.
  */
-export function createSimulation({ config, repository, logger, time, hashToken, generated }: SimulationDependencies): Simulation {
+export function createSimulation({ config, repository, logger, time, hashToken, boards, generated }: SimulationDependencies): Simulation {
   const realm = generated ?? generateWorld(config.worldSeed);
+  const leaderboards = new Leaderboards(boards ?? new InMemoryLeaderboardRepository(), logger.child({ component: 'leaderboards' }));
+  void leaderboards.load();
   const world = new GameWorld({
     generated: realm,
     rng: new Mulberry32((config.worldSeed ^ Date.now()) | 0),
     dayLengthSeconds: config.dayLengthSeconds,
-    calendar: { today: () => dayNumber(Date.parse(time.iso())) },
+    calendar: { today: () => dayNumber(Date.parse(time.iso())), iso: () => time.iso() },
+    boards: leaderboards,
   });
   const sessions = new SessionService({
     world,
     repository,
+    boards: leaderboards,
     logger: logger.child({ component: 'sessions' }),
     time,
     hashToken,
@@ -67,5 +76,5 @@ export function createSimulation({ config, repository, logger, time, hashToken, 
     logger.child({ component: 'loop' }),
     (seconds) => world.creditRealTime(seconds),
   );
-  return { world, sessions, loop };
+  return { world, sessions, loop, leaderboards };
 }

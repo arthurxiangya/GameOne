@@ -17,6 +17,9 @@ export class FakeCalendar implements Calendar {
   today(): number {
     return this.day;
   }
+  iso(): string {
+    return new Date(this.day * 86_400_000).toISOString();
+  }
 }
 
 export const makeWorld = (rng: RandomSource = constantRandom(), calendar: Calendar = new FakeCalendar()): GameWorld =>

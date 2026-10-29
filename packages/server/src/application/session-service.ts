@@ -7,6 +7,7 @@ import {
   lookForAccount,
   parseClientMessage,
   type ClientMessage,
+  type Board,
   type GameEvent,
   type ServerMessage,
 } from '@lanternwood/shared';
@@ -34,6 +35,8 @@ export interface SessionDependencies {
   readonly time: SystemTime;
   readonly hashToken: TokenHasher;
   readonly options: SessionOptions;
+  /** The leaderboards, for clients that ask. */
+  readonly boards?: { snapshot(): Board[] };
 }
 
 /** WebSocket close codes used by the game (4000–4999 is the application range). */
@@ -145,6 +148,10 @@ export class SessionService {
         player.progressDirty = false;
         this.send(session, { t: 'progress', p: cloneProgress(player.progress) });
       }
+      if (player.modeDirty) {
+        player.modeDirty = false;
+        this.send(session, { t: 'mode', m: this.deps.world.modeStatus(player) });
+      }
       if (!sendSnapshots) continue;
       // A client that cannot keep up skips snapshots; its events wait for the next one.
       if (session.link.bufferedBytes() > BACKPRESSURE_BYTES) continue;
@@ -213,6 +220,12 @@ export class SessionService {
         return;
       case 'petName':
         world.execute(player.id, { kind: 'renamePet', pet: msg.pet, name: msg.name });
+        return;
+      case 'quit':
+        world.execute(player.id, { kind: 'quit' });
+        return;
+      case 'boards':
+        this.send(session, { t: 'boards', boards: this.deps.boards?.snapshot() ?? [] });
         return;
       case 'respawn':
         world.execute(player.id, { kind: 'respawn' });

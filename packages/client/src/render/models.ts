@@ -106,6 +106,7 @@ const NPC_LOOKS: Readonly<Record<NpcId, { look: Look; options: HeroOptions }>> =
   maren: { look: { cloak: 0x6a4c8c, hood: 0xe2cf8c, skin: 0xe9c9a6, boots: 0x3b2e2a }, options: { robe: true, staff: true, beard: 0xe8e2d6 } },
   oda: { look: { cloak: 0x8a4a2c, hood: 0x5b6270, skin: 0xd9a77f, boots: 0x2e2622 }, options: { hammer: true } },
   rook: { look: { cloak: 0x46546e, hood: 0x9aa3b2, skin: 0xc99a72, boots: 0x22262e }, options: { blade: true } },
+  pip: { look: { cloak: 0xd9573b, hood: 0xf2d06b, skin: 0xf0d2b0, boots: 0x6b4a33 }, options: {} },
   ilka: { look: { cloak: 0x4b2f6e, hood: 0xb28be0, skin: 0xf0d2b0, boots: 0x2a2236 }, options: { robe: true, staff: true } },
   tamsin: { look: { cloak: 0x2f6f7a, hood: 0xd9c38a, skin: 0xe6be98, boots: 0x3b2e2a }, options: { rod: true, hat: 0xd9c38a } },
   bryn: { look: { cloak: 0x3d5a2c, hood: 0x2b3f22, skin: 0xd9a77f, boots: 0x3b2e2a }, options: { blade: true, lamp: true } },

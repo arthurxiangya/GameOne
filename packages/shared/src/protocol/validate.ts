@@ -94,6 +94,10 @@ export function parseClientMessage(data: unknown): ParseResult {
     }
     case 'respawn':
       return okMsg({ t: 'respawn' });
+    case 'quit':
+      return okMsg({ t: 'quit' });
+    case 'boards':
+      return okMsg({ t: 'boards' });
     case 'ping':
       if (!isFiniteIn(data.at, 0, Number.MAX_SAFE_INTEGER)) return fail('Invalid ping');
       return okMsg({ t: 'ping', at: data.at });

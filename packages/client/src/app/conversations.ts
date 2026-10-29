@@ -10,11 +10,13 @@ import {
   bountyFromId,
   bountyGold,
   chainStatus,
+  formatRaceTime,
   currentStep,
   npcName,
   objectiveText,
   priceText,
   sharpenCost,
+  type Medal,
   type NpcAction,
   type NpcDef,
   type NpcId,
@@ -163,6 +165,21 @@ function marksTopic(p: PlayerProgress): Topic {
   };
 }
 
+function raceTopic(p: PlayerProgress, medals: Readonly<Record<Medal, number>> | undefined): Topic {
+  const times = medals
+    ? `Gold under ${formatRaceTime(medals.gold)}, silver under ${formatRaceTime(medals.silver)}, bronze under ${formatRaceTime(medals.bronze)}.`
+    : '';
+  const best = p.records.raceBest === null ? 'You have not finished a run yet.' : `Your best: ${formatRaceTime(p.records.raceBest)}.`;
+  return {
+    key: 'race', label: 'The Ember Run', mark: '', title: 'The Ember Run',
+    paragraphs: [
+      'Eight checkpoints, every land on the island, and back across this line. Monsters leave runners alone, but no fighting and no mounts.',
+      { dim: `${times} ${best} The first medal each day pays Ember Marks. Leaderboards: press L.` },
+    ],
+    actions: [{ label: 'Start the run', primary: true, send: { action: 'race', arg: null } }, { label: 'Not now' }],
+  };
+}
+
 /** Today's board as lines of text, shared by Captain Rook and the journal. */
 export function bountyLines(p: PlayerProgress): { title: string; text: string; status: string; done: boolean }[] {
   const b = p.bounties;
@@ -193,12 +210,18 @@ function bountyTopic(p: PlayerProgress, nowMs: number): Topic {
   };
 }
 
+/** World facts some topics need. */
+export interface TopicContext {
+  readonly medals?: Readonly<Record<Medal, number>>;
+}
+
 /** Everything `npc` can talk about right now, most important first. */
-export function npcTopics(npc: NpcDef, p: PlayerProgress, nowMs: number): Topic[] {
+export function npcTopics(npc: NpcDef, p: PlayerProgress, nowMs: number, ctx: TopicContext = {}): Topic[] {
   const story = CHAINS.map((c) => storyTopic(c, npc.id, p)).filter((t): t is Topic => t !== null);
   const rank = (t: Topic): number => (t.mark === '?' ? 0 : t.mark === '!' ? 1 : 2);
   story.sort((a, b) => rank(a) - rank(b));
   const topics = [...story];
+  if (npc.services.includes('race')) topics.push(raceTopic(p, ctx.medals));
   if (npc.services.includes('bounties')) topics.push(bountyTopic(p, nowMs));
   if (npc.services.includes('forge')) topics.push(forgeTopic(p));
   if (npc.services.includes('marks')) topics.push(marksTopic(p));

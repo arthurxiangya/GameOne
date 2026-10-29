@@ -32,6 +32,8 @@ export class Player {
   lastInputSeq = 0;
   /** Set when persistent progress changed and the client needs a fresh copy. */
   progressDirty = true;
+  /** Set when the hero's mode state changed and their client needs it. */
+  modeDirty = false;
   /** The landmark the hero is standing at, so arriving counts once. */
   atLandmark: LandmarkId | null = null;
   /** The mount being ridden. Not saved: heroes always rejoin on foot. */
