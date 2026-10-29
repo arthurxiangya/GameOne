@@ -1,7 +1,8 @@
 import {
   CHAINS,
-  MARK_SHOP,
+  MAX_EGGS,
   MAX_WEAPON_TIER,
+  SHOP_ITEMS,
   SHOP_ITEM_IDS,
   TITLES,
   TONIC_PRICE,
@@ -12,11 +13,13 @@ import {
   currentStep,
   npcName,
   objectiveText,
+  priceText,
   sharpenCost,
   type NpcAction,
   type NpcDef,
   type NpcId,
   type PlayerProgress,
+  type ShopItemId,
   type StepReward,
   type StoryChain,
 } from '@lanternwood/shared';
@@ -125,17 +128,32 @@ function forgeTopic(p: PlayerProgress): Topic {
   };
 }
 
+/** Why a hero cannot buy an item right now (beyond the price), or null. */
+function shopBlock(p: PlayerProgress, id: ShopItemId): string | null {
+  const item = SHOP_ITEMS[id];
+  const g = item.grant;
+  if (g.kind === 'title' && p.titles.includes(g.title)) return 'yours';
+  if (g.kind === 'mount' && p.mounts.includes(g.mount)) return 'yours';
+  if (g.kind === 'egg') {
+    if (p.pets.some((x) => x.id === g.pet)) return 'yours';
+    if (p.eggs.some((e) => e.pet === g.pet)) return 'in your bag';
+    if (p.eggs.length >= MAX_EGGS) return 'bag full';
+  }
+  if (p.level < item.minLevel) return `level ${item.minLevel}`;
+  return null;
+}
+
 function marksTopic(p: PlayerProgress): Topic {
   return {
-    key: 'marks', label: 'Trade Ember Marks', mark: '', title: 'Ember Mark trades',
-    paragraphs: [`Bounties and the realm’s trials pay in Ember Marks. You have ${p.marks}.`],
+    key: 'marks', label: 'Mounts, eggs and Mark trades', mark: '', title: 'Oda’s trades',
+    paragraphs: [`A mount for the road, an egg to raise, or a trade for Ember Marks. You have ${p.gold} gold and ${p.marks} Ember Mark${p.marks === 1 ? '' : 's'}.`],
     actions: [
       ...SHOP_ITEM_IDS.map((id): TopicAction => {
-        const item = MARK_SHOP[id];
-        const owned = id === 'lanternbearer' && p.titles.includes('lanternbearer');
+        const item = SHOP_ITEMS[id];
+        const blocked = shopBlock(p, id);
         return {
-          label: owned ? `${item.name} · yours` : `${item.name} · ${item.marks} Mark${item.marks > 1 ? 's' : ''}`,
-          disabled: owned || p.marks < item.marks,
+          label: `${item.name} · ${blocked ?? priceText(item)}`,
+          disabled: blocked !== null || p.gold < item.gold || p.marks < item.marks,
           send: { action: 'buy', arg: id },
           close: false,
         };

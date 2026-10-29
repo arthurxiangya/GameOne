@@ -71,7 +71,7 @@ export class SnapshotBuilder {
     return {
       x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, g: b.grounded,
       hp: Math.ceil(p.hp), mhp: p.maxHp, mp: Math.floor(p.mp), mmp: p.maxMp, dead: p.dead,
-      cd: { ...p.cooldowns },
+      cd: { ...p.cooldowns }, mt: p.riding, call: Math.round(p.calling * 100) / 100,
     };
   }
 
@@ -79,6 +79,7 @@ export class SnapshotBuilder {
     return {
       k: 'p', id: p.id, x: r2(p.body.x), y: r2(p.body.y), z: r2(p.body.z), yaw: r2(p.yaw),
       hp: Math.ceil(p.hp), mhp: p.maxHp, lv: p.level, nm: p.name, look: p.look, dead: p.dead, ti: p.progress.title,
+      mt: p.riding, pet: p.progress.pet,
     };
   }
 

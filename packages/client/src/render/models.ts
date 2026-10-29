@@ -32,7 +32,7 @@ const basic = (hex: number): THREE.MeshBasicMaterial => {
   return m;
 };
 
-function part(parent: THREE.Object3D, w: number, h: number, d: number, hex: number, x: number, y: number, z: number, glow = false): THREE.Mesh {
+export function part(parent: THREE.Object3D, w: number, h: number, d: number, hex: number, x: number, y: number, z: number, glow = false): THREE.Mesh {
   const mesh = new THREE.Mesh(box, glow ? basic(hex) : lambert(hex));
   mesh.scale.set(w, h, d);
   mesh.position.set(x, y, z);
@@ -41,7 +41,7 @@ function part(parent: THREE.Object3D, w: number, h: number, d: number, hex: numb
   return mesh;
 }
 
-function joint(parent: THREE.Object3D, x: number, y: number, z: number): THREE.Group {
+export function joint(parent: THREE.Object3D, x: number, y: number, z: number): THREE.Group {
   const g = new THREE.Group();
   g.position.set(x, y, z);
   parent.add(g);

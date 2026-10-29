@@ -180,6 +180,12 @@ async function preview(browser, dir) {
     check(journal, 'the journal opens with every story listed');
     check((await solo.page.textContent('#qObj'))?.includes('Elder Maren') ?? false, 'the tracker points a new hero at Elder Maren');
     await solo.page.keyboard.press('Escape');
+    await solo.page.keyboard.press('p');
+    const stable = await solo.page
+      .waitForFunction(() => !document.getElementById('stable')?.hidden && document.querySelectorAll('#sBody .j-row').length >= 12, null, { timeout: 5000 })
+      .then(() => true, () => false);
+    check(stable, 'the stable lists every mount and pet');
+    await solo.page.keyboard.press('Escape');
     checkRendering('preview', moved);
     check(start.hp > 0, `hero has health (${start.hp})`);
   } finally {

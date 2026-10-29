@@ -31,7 +31,7 @@
         </div>
         <button id="enterBtn" class="btn primary" type="submit" disabled>Raising the realm…</button>
         <p class="fine" id="startStatus" role="status"></p>
-        <p class="fine no-touch">WASD to move · drag to look · 1–4 skills · Q tonic · E talk · J journal<span class="online-only"> · Enter to chat</span></p>
+        <p class="fine no-touch">WASD to move · drag to look · 1–4 skills · Q tonic · E talk · J journal · R ride · P pets<span class="online-only"> · Enter to chat</span></p>
         <p class="fine touch-only">Joystick to move · drag to look · tap a monster to target it</p>
       </form>
     </section>
@@ -77,6 +77,12 @@
       </button>
       <button class="btn panel iconbtn" id="journalBtn" type="button" aria-label="Journal">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h8.5a1.5 1.5 0 0 1 1.5 1.5v9.5H4.5A1.5 1.5 0 0 1 3 12zM3 12a1.5 1.5 0 0 1 1.5-1.5H13M6 5.5h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg>
+      </button>
+      <button class="btn panel iconbtn" id="stableBtn" type="button" aria-label="Stable and pets">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 6.5c0-2 2-3.5 4.5-3.5s4.5 1.5 4.5 3.5c0 1.6-1 2.5-2 3l.5 3.5h-6L5.5 9.5c-1-.5-2-1.4-2-3zM6 6.5h.01M10 6.5h.01" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg>
+      </button>
+      <button class="btn panel iconbtn" id="rideBtn" type="button" aria-label="Ride your mount (R)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5h8l2.5-3.5 1.5.5-1 4.5h-1.5v2.5M4 9.5v3.5M9 9.5v3.5M6 9.5V7.5h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg>
       </button>
       <button class="btn panel iconbtn" id="menuBtn" type="button" aria-label="Menu">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
@@ -133,6 +139,7 @@
       </button>
     </div>
     <button class="hud game btn primary talk" id="talkBtn" type="button" hidden>Talk</button>
+    <div class="hud game castbar panel" id="castbar" hidden aria-live="polite"><span id="castText">Calling…</span><div class="meter"><i id="castFill"></i></div></div>
 
     <!-- Messages -->
     <div class="hud game banner" id="banner" aria-live="polite"><b id="bannerName"></b><span id="bannerSub"></span></div>
@@ -157,6 +164,17 @@
       <div class="j-body" id="jBody"></div>
     </div>
 
+    <!-- Stable -->
+    <div class="hud game modal panel journal" id="stable" role="dialog" aria-labelledby="sTitle" hidden>
+      <div class="j-head">
+        <h2 id="sTitle">Stable &amp; pets</h2>
+        <button class="x" id="sClose" type="button" aria-label="Close the stable">
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
+        </button>
+      </div>
+      <div class="j-body" id="sBody"></div>
+    </div>
+
     <!-- Death -->
     <div class="hud game modal panel" id="death" role="dialog" aria-labelledby="deathTitle" hidden>
       <h2 id="deathTitle">You were defeated</h2>
@@ -170,7 +188,8 @@
       <ul>
         <li>Characters with a gold <b>!</b> have a story for you; a <b>?</b> means something to hand in. Elder Maren by the fountain starts the main story.</li>
         <li>Open the <b>journal</b> (J) to see every story, choose which one to follow, and check today's bounties from <b>Captain Rook</b>.</li>
-        <li>Visit <b>Smith Oda</b> to buy tonics, sharpen your blade, and trade <b>Ember Marks</b>.</li>
+        <li>Visit <b>Smith Oda</b> to buy tonics, sharpen your blade, buy a mount or a pet egg, and trade <b>Ember Marks</b>.</li>
+        <li>Press <b>R</b> to ride your mount (taking a hit or using a skill puts you back on foot) and <b>P</b> for your stable and pets. Eggs hatch after you win enough fights.</li>
         <li>Tap a monster to target it, then use your skills. Strike repeats while held.</li>
         <li class="online-only">Other heroes you see are real players. Say hello in chat.</li>
         <li class="offline-only">This is the single-player preview. Your hero is saved in this browser.</li>

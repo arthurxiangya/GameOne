@@ -244,6 +244,11 @@ body.touch .log { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); width:
 .modal .acts { display: grid; gap: 8px; margin-top: 4px; }
 .modal ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.6; color: var(--ink); }
 
+/* mount call bar */
+.castbar { left: 50%; transform: translateX(-50%); bottom: calc(284px + env(safe-area-inset-bottom, 0px)); width: min(240px, 70vw); padding: 7px 10px 9px; display: grid; gap: 5px; font-size: 11px; text-align: center; }
+.castbar .meter i { background: var(--lantern); transition: none; }
+body.riding #rideBtn { background: var(--lantern); color: var(--night); }
+
 /* journal */
 .journal { width: min(440px, calc(100vw - 24px)); max-height: min(82vh, 640px); }
 .j-head { display: flex; align-items: center; gap: 8px; }
@@ -269,6 +274,10 @@ body.touch .log { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); width:
 .chip:hover { background: var(--hover); }
 .chip.on { background: var(--lantern); color: var(--night); border-color: var(--lantern-hi); }
 .chip:focus-visible { outline: 2px solid var(--lantern); outline-offset: 2px; }
+.chip.ghost-wide { justify-self: start; }
+.row-acts { grid-column: 1 / -1; display: flex; gap: 6px; margin-top: 6px; }
+.rename { grid-column: 1 / -1; display: flex; gap: 6px; }
+.rename input { flex: 1; min-height: 36px; }
 
 @media (prefers-reduced-motion: reduce) {
   .logo text, .logo.go text { animation: none; fill-opacity: 1; stroke-opacity: 0; stroke-dashoffset: 0; }

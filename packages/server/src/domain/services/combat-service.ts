@@ -5,6 +5,7 @@ import {
   MEND_FRACTION,
   SKILLS,
   TONIC_DROP_CHANCE,
+  activePetBonus,
   killGold,
   killXp,
   tonicHeal,
@@ -55,6 +56,7 @@ export class CombatService {
     if (player.level < def.unlockLevel) return fail(`${def.name} unlocks at level ${def.unlockLevel}.`);
     if (player.cooldowns[skill] > 0) return fail(`${def.name} is not ready yet.`);
     if (player.mp < def.mana) return fail('Not enough mana.');
+    player.dismount();
     switch (skill) {
       case 'strike':
         return this.strike(player, requestedTarget);
@@ -96,6 +98,7 @@ export class CombatService {
     const amt = Math.max(1, Math.round(amount));
     player.hp -= amt;
     player.lastHurtAt = this.clock.now();
+    player.dismount();
     this.events.area(player.body.x, player.body.z, { e: 'dmg', id: player.id, amt, crit: false });
     this.events.player(player.id, { e: 'log', text: `${source.def.name} ${kind === 'slam' ? 'slams' : 'hits'} you for ${amt}`, c: 'foe' });
     if (player.hp <= 0) {
@@ -141,7 +144,7 @@ export class CombatService {
     player.mp -= def.mana;
     player.cooldowns.mend = def.cooldown;
     this.events.area(player.body.x, player.body.z, { e: 'cast', id: player.id });
-    this.heal(player, Math.round(player.maxHp * MEND_FRACTION));
+    this.heal(player, Math.round(player.maxHp * MEND_FRACTION * (1 + activePetBonus(player.progress, 'mend'))));
     return ok();
   }
 
@@ -166,7 +169,7 @@ export class CombatService {
     p.tonics -= 1;
     player.cooldowns.tonic = SKILLS.tonic.cooldown;
     player.touchProgress();
-    this.heal(player, tonicHeal(player.level));
+    this.heal(player, Math.round(tonicHeal(player.level) * (1 + activePetBonus(player.progress, 'tonicHeal'))));
     return ok();
   }
 
@@ -182,12 +185,13 @@ export class CombatService {
     monster.die();
     this.events.area(monster.x, monster.z, { e: 'die', id: monster.id });
     if (!killer) return;
-    const gold = killGold(monster.level, monster.def.boss, this.rng.next());
+    const bonus = (kind: 'gold' | 'xp'): number => 1 + activePetBonus(killer.progress, kind);
+    const gold = Math.round(killGold(monster.level, monster.def.boss, this.rng.next()) * bonus('gold'));
     this.progression.grantGold(killer, gold);
     this.events.player(killer.id, { e: 'log', text: `${monster.def.name} defeated · +${gold} gold`, c: 'loot' });
-    this.progression.grantXp(killer, killXp(monster.level, killer.level, monster.def.boss));
+    this.progression.grantXp(killer, killXp(monster.level, killer.level, monster.def.boss) * bonus('xp'));
     this.achievements.record(killer, { kind: 'kill', monster: monster.type, level: monster.level });
-    if (!monster.def.boss && this.rng.next() < TONIC_DROP_CHANCE) {
+    if (!monster.def.boss && this.rng.next() < TONIC_DROP_CHANCE * (1 + activePetBonus(killer.progress, 'tonicDrops'))) {
       killer.progress.tonics += 1;
       killer.touchProgress();
       this.events.player(killer.id, { e: 'log', text: 'Found a healing tonic', c: 'loot' });

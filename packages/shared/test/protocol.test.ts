@@ -47,6 +47,17 @@ describe('parseClientMessage', () => {
     assert.deepEqual(parseClientMessage({ t: 'npc', npc: 'rook', action: 'greet' }), { ok: true, msg: { t: 'npc', npc: 'rook', action: 'greet', arg: null } });
   });
 
+  it('checks mount and pet requests', () => {
+    assert.ok(parseClientMessage({ t: 'mount', on: true }).ok);
+    assert.equal(parseClientMessage({ t: 'mount', on: 'yes' }).ok, false);
+    assert.ok(parseClientMessage({ t: 'choose', kind: 'mount', id: 'elk' }).ok);
+    assert.ok(parseClientMessage({ t: 'choose', kind: 'pet', id: null }).ok);
+    assert.equal(parseClientMessage({ t: 'choose', kind: 'pet', id: 'elk' }).ok, false);
+    assert.equal(parseClientMessage({ t: 'choose', kind: 'dragon', id: null }).ok, false);
+    assert.deepEqual(parseClientMessage({ t: 'petName', pet: 'fox', name: '  Kit<b> ' }), { ok: true, msg: { t: 'petName', pet: 'fox', name: 'Kitb' } });
+    assert.equal(parseClientMessage({ t: 'petName', pet: 'fox', name: '!' }).ok, false);
+  });
+
   it('accepts only earned-title ids or null', () => {
     assert.ok(parseClientMessage({ t: 'title', title: 'bellfinder' }).ok);
     assert.ok(parseClientMessage({ t: 'title', title: null }).ok);

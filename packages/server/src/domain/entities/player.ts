@@ -6,6 +6,7 @@ import {
   maxMpFor,
   type InputFrame,
   type LandmarkId,
+  type MountId,
   type PhysicsBody,
   type PlayerProgress,
   type SkillId,
@@ -33,6 +34,10 @@ export class Player {
   progressDirty = true;
   /** The landmark the hero is standing at, so arriving counts once. */
   atLandmark: LandmarkId | null = null;
+  /** The mount being ridden. Not saved: heroes always rejoin on foot. */
+  riding: MountId | null = null;
+  /** Seconds left calling a mount, or 0. */
+  calling = 0;
 
   constructor(
     readonly id: number,
@@ -76,7 +81,16 @@ export class Player {
     this.mp = this.maxMp;
   }
 
+  /** Back on foot, and any mount call cancelled. Returns true if anything changed. */
+  dismount(): boolean {
+    const changed = this.riding !== null || this.calling > 0;
+    this.riding = null;
+    this.calling = 0;
+    return changed;
+  }
+
   teleport(to: Readonly<Vec3>): void {
+    this.dismount();
     Object.assign(this.body, { x: to.x, y: to.y + 0.05, z: to.z, vx: 0, vy: 0, vz: 0, grounded: false });
     this.yaw = Math.PI;
   }

@@ -6,6 +6,7 @@ A voxel MMORPG for the browser. An authoritative Node.js game server simulates a
 - **Five zones and a hub town.** Emberhold, Sunmeadow, Reedmere, Lanternwood, the Amber Dunes and Frostspine Peaks, with leveled monsters and a final boss.
 - **Stories.** Four story chains told by seven characters: the main quest to the Warden of the Frost Heart, plus The Drowned Bell, The Lantern Thief and Glass of the Rift, with objectives to defeat, collect, find and talk. Stories are data (`shared/src/game/story.ts`), run by one engine on the server.
 - **Daily bounties.** Captain Rook posts three new bounties every day at midnight UTC, the same for everyone, paying gold, XP and Ember Marks.
+- **Mounts and pets.** Five mounts (R to ride, up to 80% faster on land) and seven pets that hatch from eggs, level up with you and each give a small bonus (P for the stable).
 - **RPG systems.** Four skills, tonics, critical hits, experience and levels up to 20, gold, weapon upgrades, Ember Marks and titles, and a journal (J) that tracks it all.
 - **Persistent heroes.** Progress is saved on the server and restored when you return in the same browser.
 - **Works on phones.** A touch joystick and skill wheel, tap-to-target, and a smaller draw distance on small screens.

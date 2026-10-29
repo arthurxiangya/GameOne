@@ -120,6 +120,7 @@ export class StoryService {
     this.events.player(player.id, { e: 'log', text: `Completed: ${step.title}${paid ? ` · ${paid}` : ''}`, c: 'sys' });
     if (r.marks) this.progression.grantMarks(player, r.marks);
     if (r.title) this.progression.grantTitle(player, r.title);
+    if (r.mount) this.progression.grantMount(player, r.mount);
     this.progression.grantXp(player, r.xp);
 
     cp.step += 1;

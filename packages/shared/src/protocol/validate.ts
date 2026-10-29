@@ -1,4 +1,6 @@
 import { isShopItemId } from '../game/economy';
+import { isMountId } from '../game/mounts';
+import { isPetId } from '../game/pets';
 import { isNpcAction, isNpcId } from '../game/npcs';
 import { isSkillId } from '../game/skills';
 import { isChainId } from '../game/story';
@@ -69,6 +71,20 @@ export function parseClientMessage(data: unknown): ParseResult {
     case 'title': {
       if (data.title !== null && !isTitleId(data.title)) return fail('Unknown title');
       return okMsg({ t: 'title', title: data.title as TitleId | null });
+    }
+    case 'mount':
+      if (typeof data.on !== 'boolean') return fail('Invalid mount request');
+      return okMsg({ t: 'mount', on: data.on });
+    case 'choose': {
+      if (data.kind === 'mount' && (data.id === null || isMountId(data.id))) return okMsg({ t: 'choose', kind: 'mount', id: data.id });
+      if (data.kind === 'pet' && (data.id === null || isPetId(data.id))) return okMsg({ t: 'choose', kind: 'pet', id: data.id });
+      return fail('Unknown mount or pet');
+    }
+    case 'petName': {
+      if (!isPetId(data.pet) || typeof data.name !== 'string' || data.name.length > 100) return fail('Invalid pet name');
+      const name = sanitizeName(data.name);
+      if (!name) return fail('Pet names need 2–14 letters or numbers');
+      return okMsg({ t: 'petName', pet: data.pet, name });
     }
     case 'chat': {
       if (typeof data.text !== 'string' || data.text.length > 1000) return fail('Invalid chat message');

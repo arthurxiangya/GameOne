@@ -32,6 +32,8 @@ export class LocalPlayer {
   /** Reconciliations that moved the hero noticeably (> 5 cm), and teleport-sized snaps. For diagnostics. */
   corrections = 0;
   snaps = 0;
+  /** Walking-speed multiplier of the mount being ridden, from the server; 1 on foot. */
+  landSpeed = 1;
 
   constructor(private world: VoxelWorld) {}
 
@@ -55,7 +57,7 @@ export class LocalPlayer {
   step(intent: MoveIntent): InputFrame {
     copyBody(this.body, this.previous);
     const frame: InputFrame = { seq: ++this.seq, fwd: intent.fwd, strafe: intent.strafe, yaw: intent.yaw, jump: intent.jump, swim: intent.swim };
-    const result = stepPlayer(this.world, this.body, intent, SIM_DT);
+    const result = stepPlayer(this.world, this.body, intent, SIM_DT, this.landSpeed);
     if (result.moveLength > 0.1) this.yaw = Math.atan2(result.moveX, result.moveZ);
     this.pending.push(frame);
     if (this.pending.length > MAX_PENDING) this.pending.shift();
@@ -69,7 +71,7 @@ export class LocalPlayer {
     const by = this.body.y;
     const bz = this.body.z;
     Object.assign(this.body, { x: server.x, y: server.y, z: server.z, vx: server.vx, vy: server.vy, vz: server.vz, grounded: server.g });
-    for (const f of this.pending) stepPlayer(this.world, this.body, f, SIM_DT);
+    for (const f of this.pending) stepPlayer(this.world, this.body, f, SIM_DT, this.landSpeed);
 
     const dx = this.body.x - bx;
     const dy = this.body.y - by;

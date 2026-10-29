@@ -1,10 +1,15 @@
 import {
   CHAINS,
+  EGG_HATCH_KILLS,
+  MAX_EGGS,
   MAX_LEVEL,
   MAX_WEAPON_TIER,
+  PET_MAX_LEVEL,
   STEP_STATES,
   cloneProgress,
   emptyBountyProgress,
+  isMountId,
+  isPetId,
   isTitleId,
   newChainProgress,
   newProgress,
@@ -12,6 +17,9 @@ import {
   sanitizeName,
   type BountyProgress,
   type ChainProgress,
+  type EggState,
+  type MountId,
+  type PetState,
   type PlayerProgress,
   type StepState,
   type StoryProgress,
@@ -42,6 +50,11 @@ export const progressFromRecord = (r: PlayerRecord): PlayerProgress =>
     marks: r.marks,
     titles: r.titles,
     title: r.title,
+    mounts: r.mounts,
+    mount: r.mount,
+    pets: r.pets,
+    pet: r.pet,
+    eggs: r.eggs,
   });
 
 export const recordFromPlayer = (base: PlayerRecord, player: Player, isoTime: string): PlayerRecord => ({
@@ -66,8 +79,12 @@ export function parsePlayerRecord(data: unknown): PlayerRecord | null {
   if (!intIn(r.level, 1, MAX_LEVEL) || !intIn(r.xp, 0, 1e9) || !intIn(r.gold, 0, 1e9) || !intIn(r.tonics, 0, 9999)) return null;
   if (!intIn(r.weapon, 0, MAX_WEAPON_TIER) || !intIn(r.falls, 0, 1e9)) return null;
   const titles = parseTitles(r.titles);
-  const story = parseStory(r.story) ?? migrateLegacyQuest(r, titles);
+  const story = parseStory(r.story) ?? migrateLegacyQuest(r);
+  const mounts = Array.isArray(r.mounts) ? [...new Set(r.mounts.filter(isMountId))] : [];
+  grantMissingUnlocks(story, titles, mounts);
   const title = isTitleId(r.title) && titles.includes(r.title) ? r.title : null;
+  const pets = parsePets(r.pets);
+  const owns = (pet: unknown): boolean => pets.some((x) => x.id === pet);
   return {
     accountId: r.accountId,
     name,
@@ -82,9 +99,53 @@ export function parsePlayerRecord(data: unknown): PlayerRecord | null {
     marks: intIn(r.marks, 0, 1e6) ? r.marks : 0,
     titles,
     title,
+    mounts,
+    mount: isMountId(r.mount) && mounts.includes(r.mount) ? r.mount : (mounts[0] ?? null),
+    pets,
+    pet: isPetId(r.pet) && owns(r.pet) ? r.pet : null,
+    eggs: parseEggs(r.eggs).filter((e) => !owns(e.pet)),
     createdAt: typeof r.createdAt === 'string' ? r.createdAt : new Date(0).toISOString(),
     updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : new Date(0).toISOString(),
   };
+}
+
+/**
+ * Rewards that unlock something (titles, mounts) are granted again on load if the hero
+ * finished their step before the reward existed, so new unlocks reach existing heroes.
+ */
+function grantMissingUnlocks(story: StoryProgress, titles: TitleId[], mounts: MountId[]): void {
+  for (const chain of CHAINS) {
+    chain.steps.slice(0, story[chain.id].step).forEach(({ reward }) => {
+      if (reward.title && !titles.includes(reward.title)) titles.push(reward.title);
+      if (reward.mount && !mounts.includes(reward.mount)) mounts.push(reward.mount);
+    });
+  }
+}
+
+function parsePets(v: unknown): PetState[] {
+  if (!Array.isArray(v)) return [];
+  const pets: PetState[] = [];
+  for (const x of v) {
+    if (!isRecord(x) || !isPetId(x.id) || pets.some((p) => p.id === x.id)) continue;
+    const name = typeof x.name === 'string' ? sanitizeName(x.name) : null;
+    pets.push({
+      id: x.id,
+      name: name ?? x.id,
+      level: intIn(x.level, 1, PET_MAX_LEVEL) ? x.level : 1,
+      xp: intIn(x.xp, 0, 1e7) ? x.xp : 0,
+    });
+  }
+  return pets;
+}
+
+function parseEggs(v: unknown): EggState[] {
+  if (!Array.isArray(v)) return [];
+  const eggs: EggState[] = [];
+  for (const x of v) {
+    if (eggs.length >= MAX_EGGS || !isRecord(x) || !isPetId(x.pet) || eggs.some((e) => e.pet === x.pet)) continue;
+    eggs.push({ pet: x.pet, kills: intIn(x.kills, 0, EGG_HATCH_KILLS) ? x.kills : 0 });
+  }
+  return eggs;
 }
 
 function parseTitles(v: unknown): TitleId[] {
@@ -107,7 +168,7 @@ function parseStory(v: unknown): StoryProgress | null {
 }
 
 /** Saves from before the story engine kept the main chain as `quest`, `questProgress`, `questState`. */
-function migrateLegacyQuest(r: Record<string, unknown>, titles: TitleId[]): StoryProgress {
+function migrateLegacyQuest(r: Record<string, unknown>): StoryProgress {
   const story = newStoryProgress();
   const steps = CHAINS[0]!.steps.length;
   if (!intIn(r.quest, 0, steps)) return story;
@@ -118,8 +179,6 @@ function migrateLegacyQuest(r: Record<string, unknown>, titles: TitleId[]): Stor
     progress: intIn(r.questProgress, 0, 1000) ? r.questProgress : 0,
     state: finished ? 'active' : legacy,
   };
-  // Heroes who beat the Warden before titles existed get the title they earned.
-  if (finished && !titles.includes('hero')) titles.push('hero');
   return story;
 }
 

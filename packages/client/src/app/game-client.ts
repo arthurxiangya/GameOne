@@ -1,5 +1,7 @@
 import {
   MONSTERS,
+  MOUNTS,
+  MOUNT_CALL_SECONDS,
   NPC_INTERACT_RANGE,
   PROTOCOL_VERSION,
   SIM_DT,
@@ -7,6 +9,7 @@ import {
   SKILL_IDS,
   TITLES,
   generateWorld,
+  mountSpeed,
   zoneForBiome,
   type ChainId,
   type EntityState,
@@ -28,6 +31,7 @@ import { Joystick } from '../input/joystick';
 import { PointerCamera } from '../input/pointer-camera';
 import type { Transport, TransportFactory } from '../net/transport';
 import { CameraRig } from '../render/camera-rig';
+import { CompanionViews } from '../render/companion-views';
 import { Effects } from '../render/effects';
 import { EntityViews } from '../render/entity-views';
 import { FpsMeter, PerformanceGovernor } from '../render/performance-governor';
@@ -42,6 +46,7 @@ import { DialogView } from '../ui/dialog';
 import { byId } from '../ui/dom';
 import { Hud } from '../ui/hud';
 import { JournalView } from '../ui/journal';
+import { StableView } from '../ui/stable';
 import { Minimap, type MapMarker } from '../ui/minimap';
 import { Notices } from '../ui/notices';
 import { Overlay } from '../ui/overlay';
@@ -79,6 +84,7 @@ export class GameClient {
   private readonly sky: SkySystem;
   private readonly terrain: TerrainRenderer;
   private readonly views: EntityViews;
+  private readonly companions: CompanionViews;
   private readonly effects: Effects;
   private readonly cameraRig: CameraRig;
   private readonly pointer: PointerCamera;
@@ -89,6 +95,7 @@ export class GameClient {
   private readonly chat = new ChatPanel();
   private readonly dialog = new DialogView();
   private readonly journal: JournalView;
+  private readonly stable: StableView;
   private readonly title: TitleScreen;
   private readonly keyboard = new KeyboardInput();
   private readonly joystick: Joystick;
@@ -129,6 +136,8 @@ export class GameClient {
   private questTimer = 0;
   /** The story shown in the tracker and on the map; chosen in the journal or followed automatically. */
   private tracked: ChainId | null = null;
+  /** Seconds left on the mount call bar, counted down locally between snapshots. */
+  private callLeft = 0;
   private nearNpc: NpcDef | null = null;
   private frameCount = 0;
   private lastFrame = performance.now();
@@ -156,6 +165,7 @@ export class GameClient {
     ]);
     this.terrain = new TerrainRenderer(this.ctx.scene, options.reduceMotion);
     this.views = new EntityViews(this.ctx.scene);
+    this.companions = new CompanionViews(this.ctx.scene);
     this.effects = new Effects(this.ctx.scene);
     this.cameraRig = new CameraRig(this.ctx.camera);
     this.overlay = new Overlay(byId('overlay'), (x, y, z) => this.ctx.toScreen(x, y, z));
@@ -164,6 +174,11 @@ export class GameClient {
     this.journal = new JournalView({
       track: (id) => this.track(id),
       title: (id) => this.connection.send({ t: 'title', title: id }),
+    });
+    this.stable = new StableView({
+      chooseMount: (id) => this.connection.send({ t: 'choose', kind: 'mount', id }),
+      choosePet: (id) => this.connection.send({ t: 'choose', kind: 'pet', id }),
+      renamePet: (pet, name) => this.connection.send({ t: 'petName', pet, name }),
     });
     this.joystick = new Joystick(byId('stick'), byId('knob'));
     document.body.classList.toggle('offline', options.offline);
@@ -217,6 +232,8 @@ export class GameClient {
         case 'q': this.useSkill('tonic'); break;
         case 'e': if (this.nearNpc) this.openNpc(this.nearNpc); break;
         case 'j': this.toggleJournal(); break;
+        case 'p': this.toggleStable(); break;
+        case 'r': this.toggleMount(); break;
         case 'tab': this.cycleTarget(); break;
         case 'enter': if (!this.options.offline) { this.keyboard.clear(); this.chat.open(); } break;
         case 'escape': this.escape(); break;
@@ -235,6 +252,8 @@ export class GameClient {
       if (this.nearNpc) this.openNpc(this.nearNpc);
     });
     byId('journalBtn').addEventListener('click', () => this.toggleJournal());
+    byId('stableBtn').addEventListener('click', () => this.toggleStable());
+    byId('rideBtn').addEventListener('click', () => this.toggleMount());
     byId('questBox').addEventListener('click', () => this.toggleJournal());
     window.addEventListener('resize', () => this.minimap.resize());
   }
@@ -294,6 +313,8 @@ export class GameClient {
     this.overlay.clear();
     this.dialog.close();
     this.journal.close();
+    this.stable.close();
+    this.companions.clear();
     this.chat.close();
     this.setTarget(null);
     for (const id of ['menu', 'death']) byId(id).hidden = true;
@@ -355,6 +376,9 @@ export class GameClient {
     this.timeOfDay = msg.day;
     this.self = msg.you;
     this.cooldowns = { ...msg.you.cd };
+    local.landSpeed = mountSpeed(msg.you.mt);
+    this.callLeft = msg.you.call;
+    document.body.classList.toggle('riding', msg.you.mt !== null);
     if (!this.haveSnapshot) {
       local.reset(msg.you);
       this.haveSnapshot = true;
@@ -368,6 +392,7 @@ export class GameClient {
     for (const e of added) this.addEntityView(e);
     for (const e of removed) {
       this.views.remove(e.id);
+      this.companions.remove(e.id);
       this.overlay.removePlate(`e${e.id}`);
       if (this.targetId === e.id) this.setTarget(null);
     }
@@ -394,6 +419,28 @@ export class GameClient {
     const npc = this.dialog.npc;
     if (npc && this.dialog.isOpen) this.dialog.show(npc, npcTopics(npc, p, Date.now()), (a) => this.chooseTopic(npc, a), true);
     this.journal.refresh(p, this.tracked, Date.now());
+    this.stable.refresh(p);
+  }
+
+  private toggleStable(): void {
+    if (this.phase !== 'playing' || !this.progress) return;
+    if (this.stable.isOpen) this.stable.close();
+    else {
+      this.dialog.close();
+      this.journal.close();
+      this.stable.open(this.progress);
+    }
+  }
+
+  private toggleMount(): void {
+    const self = this.self;
+    if (this.phase !== 'playing' || !self || self.dead) return;
+    const p = this.progress;
+    if (!self.mt && self.call <= 0 && p && !p.mount) {
+      this.notices.toast(p.mounts.length ? 'Choose a mount in the stable (P).' : 'No mount yet. Smith Oda sells the Meadow Strider at level 5.', 2.6);
+      return;
+    }
+    this.connection.send({ t: 'mount', on: !self.mt && self.call <= 0 });
   }
 
   private track(id: ChainId): void {
@@ -407,6 +454,7 @@ export class GameClient {
     if (this.journal.isOpen) this.journal.close();
     else {
       this.dialog.close();
+      this.stable.close();
       this.journal.open(this.progress, this.tracked, Date.now());
     }
   }
@@ -474,6 +522,9 @@ export class GameClient {
       case 'story':
         this.notices.banner(ev.title, 'Complete');
         this.chat.system(`“${ev.text}”`, 'good');
+        break;
+      case 'banner':
+        this.notices.banner(ev.title, ev.text);
         break;
       case 'die':
         if (this.targetId === ev.id) window.setTimeout(() => this.targetId === ev.id && this.setTarget(null), 500);
@@ -566,6 +617,7 @@ export class GameClient {
     if (!menu.hidden) menu.hidden = true;
     else if (this.dialog.isOpen) this.dialog.close();
     else if (this.journal.isOpen) this.journal.close();
+    else if (this.stable.isOpen) this.stable.close();
     else this.setTarget(null);
   }
 
@@ -637,7 +689,10 @@ export class GameClient {
 
     if ((this.strikeTouch || this.keyboard.isDown('1')) && this.cooldowns.strike <= 0 && this.now - this.lastStrike > 0.2) this.useSkill('strike');
 
-    this.views.update(this.selfId, { ...this.renderPos, yaw: local.yaw, dead: this.self?.dead ?? false, attacking: false }, dt, this.now);
+    const dead = this.self?.dead ?? false;
+    const lift = this.companions.update(this.selfId, { ...this.renderPos, yaw: local.yaw }, this.self?.mt ?? null, this.progress?.pet ?? null, dead, dt, this.now);
+    this.views.update(this.selfId, { ...this.renderPos, y: this.renderPos.y + lift, yaw: local.yaw, dead, attacking: false, seated: lift > 0 }, dt, this.now);
+    this.updateCallBar(elapsed);
     const lamp = this.views.heroLampPosition();
     if (lamp) this.sky.heroLight.position.set(lamp.x, lamp.y, lamp.z);
     this.sky.heroLight.intensity = 10 * this.sky.night;
@@ -684,7 +739,8 @@ export class GameClient {
   private updateEntity(e: RemoteEntity, dt: number): void {
     const s = e.state;
     const dead = s.k === 'm' ? s.st === 'dead' : s.dead;
-    this.views.update(e.id, { ...e.pose, dead, attacking: s.k === 'm' && s.st === 'attack' }, dt, this.now);
+    const lift = s.k === 'p' ? this.companions.update(e.id, e.pose, s.mt, s.pet, dead, dt, this.now) : 0;
+    this.views.update(e.id, { ...e.pose, y: e.pose.y + lift, dead, attacking: s.k === 'm' && s.st === 'attack', seated: lift > 0 }, dt, this.now);
     const distance = Math.hypot(e.pose.x - this.renderPos.x, e.pose.z - this.renderPos.z);
     const targeted = e.id === this.targetId;
     const boss = s.k === 'm' && MONSTERS[s.ty].boss;
@@ -732,6 +788,19 @@ export class GameClient {
     } else if (!talk.hidden) talk.hidden = true;
     const open = this.dialog.npc;
     if (open && Math.hypot(open.x - this.renderPos.x, open.z - this.renderPos.z) > 6) this.dialog.close();
+  }
+
+  private updateCallBar(elapsed: number): void {
+    const bar = byId('castbar');
+    this.callLeft = Math.max(0, this.callLeft - elapsed);
+    const calling = this.callLeft > 0 && !this.self?.mt;
+    if (bar.hidden !== !calling) bar.hidden = !calling;
+    if (!calling) return;
+    const mount = this.progress?.mount;
+    const label = `Calling ${mount ? MOUNTS[mount].name : 'your mount'}…`;
+    const text = byId('castText');
+    if (text.textContent !== label) text.textContent = label;
+    byId('castFill').style.transform = `scaleX(${(1 - this.callLeft / MOUNT_CALL_SECONDS).toFixed(3)})`;
   }
 
   private updateZone(dt: number, world: GeneratedWorld['world']): void {

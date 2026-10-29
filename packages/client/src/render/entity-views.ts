@@ -23,6 +23,8 @@ export interface PoseInput {
   readonly yaw: number;
   readonly dead: boolean;
   readonly attacking: boolean;
+  /** Riding a mount: legs forward, no walk cycle. */
+  readonly seated?: boolean;
 }
 
 interface NpcView {
@@ -161,6 +163,10 @@ export class EntityViews {
       rig.body.position.y = rig.legs.length === 2 && !rig.arms.length ? Math.abs(Math.sin(v.walk)) * 0.06 * (moving ? 1 : 0) : 0;
     }
     rig.legs.forEach((leg, i) => {
+      if (pose.seated) {
+        leg.rotation.x = -1.35;
+        return;
+      }
       if (rig.splay) {
         leg.rotation.y = moving ? Math.sin(v.walk * 3 + i * 1.3) * 0.45 : 0;
       } else {
@@ -169,7 +175,7 @@ export class EntityViews {
       }
     });
     if (rig.arms.length === 2) {
-      const sway = moving ? Math.sin(v.walk * 2) * 0.5 : 0;
+      const sway = moving && !pose.seated ? Math.sin(v.walk * 2) * 0.5 : 0;
       rig.arms[0]!.rotation.x = pose.attacking ? -2.2 * lunge : sway;
       rig.arms[1]!.rotation.x = pose.attacking ? -2.2 * lunge : -sway;
     }
@@ -180,7 +186,7 @@ export class EntityViews {
         const p = 1 - v.swing / SWING_SECONDS;
         rig.armR.rotation.x = p < 0.35 ? lerp(0, -2.3, p / 0.35) : lerp(-2.3, 0.5, (p - 0.35) / 0.65);
       } else {
-        rig.armR.rotation.x = lerp(rig.armR.rotation.x, moving ? -Math.sin(v.walk) * 0.5 : 0, damp(14, dt));
+        rig.armR.rotation.x = lerp(rig.armR.rotation.x, moving && !pose.seated ? -Math.sin(v.walk) * 0.5 : 0, damp(14, dt));
       }
     }
     if (rig.armL) {
@@ -188,7 +194,7 @@ export class EntityViews {
         v.cast = Math.max(0, v.cast - dt);
         rig.armL.rotation.x = -1.6;
       } else {
-        rig.armL.rotation.x = lerp(rig.armL.rotation.x, moving ? Math.sin(v.walk) * 0.5 : 0, damp(14, dt));
+        rig.armL.rotation.x = lerp(rig.armL.rotation.x, moving && !pose.seated ? Math.sin(v.walk) * 0.5 : 0, damp(14, dt));
       }
     }
   }
