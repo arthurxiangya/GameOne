@@ -6,6 +6,7 @@ interface Plate {
   readonly root: HTMLDivElement;
   readonly mark: HTMLSpanElement;
   readonly fill: HTMLElement;
+  sub: HTMLSpanElement | null;
   shown: boolean;
   hpWidth: number;
   hpVisible: boolean;
@@ -40,7 +41,20 @@ export class Overlay {
     bar.append(fill);
     root.append(mark, nameEl, bar);
     this.root.append(root);
-    this.plates.set(key, { root, mark, fill, shown: false, hpWidth: -1, hpVisible: false, markText: '', targeted: false });
+    this.plates.set(key, { root, mark, fill, sub: null, shown: false, hpWidth: -1, hpVisible: false, markText: '', targeted: false });
+  }
+
+  /** A small second line under the name, such as a hero's title; empty to hide it. */
+  setSub(key: string, text: string): void {
+    const plate = this.plates.get(key);
+    if (!plate) return;
+    if (!plate.sub) {
+      if (!text) return;
+      plate.sub = el('span', 'sub');
+      plate.root.querySelector('.nm')?.after(plate.sub);
+    }
+    if (plate.sub.textContent !== text) plate.sub.textContent = text;
+    plate.sub.hidden = !text;
   }
 
   removePlate(key: string): void {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { NPCS, PHYSICS, QUESTS, SIM_DT, type InputFrame } from '@lanternwood/shared';
+import { PHYSICS, SIM_DT, chainById, findNpc, type InputFrame } from '@lanternwood/shared';
 import { INITIAL_INPUT_CREDIT, MAX_INPUT_BACKLOG, MAX_INPUT_CREDIT } from '../src/application/game-world';
 import { makeWorld, monsterOf, runTicks, spawnHero, standNextTo } from './support';
 
@@ -100,44 +100,48 @@ describe('GameWorld', () => {
     const world = makeWorld();
     const hero = spawnHero(world);
     hero.progress.gold = 100;
-    const oda = NPCS.find((n) => n.id === 'oda')!;
+    const oda = findNpc(world.npcs, 'oda')!;
     Object.assign(hero.body, { x: 40, z: 40 });
-    assert.equal(world.execute(hero.id, { kind: 'npc', npc: 'oda', action: 'buyTonic' }).ok, false);
+    assert.equal(world.execute(hero.id, { kind: 'npc', npc: 'oda', action: 'buyTonic', arg: null }).ok, false);
     Object.assign(hero.body, { x: oda.x + 1, z: oda.z });
     const tonics = hero.progress.tonics;
-    assert.ok(world.execute(hero.id, { kind: 'npc', npc: 'oda', action: 'buyTonic' }).ok);
+    assert.ok(world.execute(hero.id, { kind: 'npc', npc: 'oda', action: 'buyTonic', arg: null }).ok);
     assert.equal(hero.progress.tonics, tonics + 1);
     assert.equal(hero.progress.gold, 85);
-    assert.equal(world.execute(hero.id, { kind: 'npc', npc: 'oda', action: 'questAccept' }).ok, false);
+    assert.equal(world.execute(hero.id, { kind: 'npc', npc: 'oda', action: 'accept', arg: 'main' }).ok, false);
+    const maren = findNpc(world.npcs, 'maren')!;
+    Object.assign(hero.body, { x: maren.x + 1, z: maren.z });
+    assert.equal(world.execute(hero.id, { kind: 'npc', npc: 'maren', action: 'buyTonic', arg: null }).ok, false, 'only the smith sells tonics');
   });
 
   it('runs the first quest from acceptance to reward', () => {
     const world = makeWorld();
     const hero = spawnHero(world);
-    const maren = NPCS.find((n) => n.id === 'maren')!;
+    const maren = findNpc(world.npcs, 'maren')!;
+    const first = chainById('main').steps[0]!;
     const atMaren = (): void => void Object.assign(hero.body, { x: maren.x, z: maren.z + 1.5 });
 
     atMaren();
-    assert.ok(world.execute(hero.id, { kind: 'npc', npc: 'maren', action: 'questAccept' }).ok);
-    assert.equal(hero.progress.questState, 'active');
+    assert.ok(world.execute(hero.id, { kind: 'npc', npc: 'maren', action: 'accept', arg: 'main' }).ok);
+    assert.equal(hero.progress.story.main.state, 'active');
 
-    for (let i = 0; i < QUESTS[0]!.need; i++) {
+    for (let i = 0; i < (first.objective.kind === 'defeat' ? first.objective.count : 0); i++) {
       const puffcap = monsterOf(world, 'puffcap', i);
       standNextTo(hero, puffcap);
       puffcap.hp = 1;
       hero.cooldowns.strike = 0;
       assert.ok(world.execute(hero.id, { kind: 'skill', skill: 'strike', target: puffcap.id }).ok);
     }
-    assert.equal(hero.progress.questState, 'ready');
+    assert.equal(hero.progress.story.main.state, 'ready');
 
     atMaren();
     const gold = hero.progress.gold;
     const tonics = hero.progress.tonics;
-    assert.ok(world.execute(hero.id, { kind: 'npc', npc: 'maren', action: 'questTurnIn' }).ok);
-    assert.equal(hero.progress.quest, 1);
-    assert.equal(hero.progress.questState, 'available');
-    assert.equal(hero.progress.gold, gold + QUESTS[0]!.gold);
-    assert.equal(hero.progress.tonics, tonics + QUESTS[0]!.tonics);
+    assert.ok(world.execute(hero.id, { kind: 'npc', npc: 'maren', action: 'turnIn', arg: 'main' }).ok);
+    assert.equal(hero.progress.story.main.step, 1);
+    assert.equal(hero.progress.story.main.state, 'available', 'Maren hands out each main quest herself');
+    assert.equal(hero.progress.gold, gold + first.reward.gold);
+    assert.equal(hero.progress.tonics, tonics + (first.reward.tonics ?? 0));
   });
 
   it('revives a defeated hero in town with full health', () => {

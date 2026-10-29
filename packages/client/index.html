@@ -31,7 +31,7 @@
         </div>
         <button id="enterBtn" class="btn primary" type="submit" disabled>Raising the realm…</button>
         <p class="fine" id="startStatus" role="status"></p>
-        <p class="fine no-touch">WASD to move · drag to look · 1–4 skills · Q tonic · E talk<span class="online-only"> · Enter to chat</span></p>
+        <p class="fine no-touch">WASD to move · drag to look · 1–4 skills · Q tonic · E talk · J journal<span class="online-only"> · Enter to chat</span></p>
         <p class="fine touch-only">Joystick to move · drag to look · tap a monster to target it</p>
       </form>
     </section>
@@ -75,6 +75,9 @@
       <button class="btn panel iconbtn online-only" id="chatBtn" type="button" aria-label="Chat">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
       </button>
+      <button class="btn panel iconbtn" id="journalBtn" type="button" aria-label="Journal">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h8.5a1.5 1.5 0 0 1 1.5 1.5v9.5H4.5A1.5 1.5 0 0 1 3 12zM3 12a1.5 1.5 0 0 1 1.5-1.5H13M6 5.5h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg>
+      </button>
       <button class="btn panel iconbtn" id="menuBtn" type="button" aria-label="Menu">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
       </button>
@@ -87,12 +90,12 @@
         <svg viewBox="0 0 12 12" aria-hidden="true"><circle id="clkSun" class="sunic" cx="6" cy="6" r="4" /><path id="clkMoon" class="moonic" d="M8 1.5A4.6 4.6 0 1 0 10.5 9 3.8 3.8 0 0 1 8 1.5z" visibility="hidden" /></svg>
         <b id="clock">07:40</b> <span id="phase">Morning</span> · <span id="ping">— ms</span> · <span id="fps">— fps</span>
       </p>
-      <div class="quest panel" id="questBox">
+      <button class="quest panel" id="questBox" type="button" aria-label="Open the journal">
         <span class="q-k" id="qKind">Quest</span>
         <span class="q-t" id="qTitle">Elder Maren has work</span>
         <span class="q-o" id="qObj">Talk to her by the fountain</span>
         <span class="q-w" id="qWhere">Emberhold</span>
-      </div>
+      </button>
     </aside>
 
     <div class="hud game log" id="log" aria-live="polite"></div>
@@ -143,6 +146,17 @@
       <div class="acts" id="dlgActs"></div>
     </div>
 
+    <!-- Journal -->
+    <div class="hud game modal panel journal" id="journal" role="dialog" aria-labelledby="jTitle" hidden>
+      <div class="j-head">
+        <h2 id="jTitle">Journal</h2>
+        <button class="x" id="jClose" type="button" aria-label="Close the journal">
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
+        </button>
+      </div>
+      <div class="j-body" id="jBody"></div>
+    </div>
+
     <!-- Death -->
     <div class="hud game modal panel" id="death" role="dialog" aria-labelledby="deathTitle" hidden>
       <h2 id="deathTitle">You were defeated</h2>
@@ -154,8 +168,9 @@
     <div class="hud game modal panel" id="menu" role="dialog" aria-labelledby="menuTitle" hidden>
       <h2 id="menuTitle">Menu</h2>
       <ul>
-        <li>Talk to <b>Elder Maren</b> (gold <b>!</b> above her) for quests.</li>
-        <li>Visit <b>Smith Oda</b> to buy tonics and sharpen your blade.</li>
+        <li>Characters with a gold <b>!</b> have a story for you; a <b>?</b> means something to hand in. Elder Maren by the fountain starts the main story.</li>
+        <li>Open the <b>journal</b> (J) to see every story, choose which one to follow, and check today's bounties from <b>Captain Rook</b>.</li>
+        <li>Visit <b>Smith Oda</b> to buy tonics, sharpen your blade, and trade <b>Ember Marks</b>.</li>
         <li>Tap a monster to target it, then use your skills. Strike repeats while held.</li>
         <li class="online-only">Other heroes you see are real players. Say hello in chat.</li>
         <li class="offline-only">This is the single-player preview. Your hero is saved in this browser.</li>

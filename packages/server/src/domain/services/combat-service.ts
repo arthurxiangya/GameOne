@@ -11,13 +11,13 @@ import {
   type RandomSource,
   type SkillId,
 } from '@lanternwood/shared';
+import type { AchievementSink } from '../achievements';
 import type { Monster } from '../entities/monster';
 import type { Player } from '../entities/player';
 import type { EventSink } from '../events';
 import type { Clock } from '../ports';
 import { fail, ok, type Result } from '../result';
 import type { ProgressionService } from './progression-service';
-import type { QuestService } from './quest-service';
 
 /** What combat needs to know about the world. Implemented by the application layer. */
 export interface CombatWorld {
@@ -46,7 +46,7 @@ export class CombatService {
     private readonly clock: Clock,
     private readonly events: EventSink,
     private readonly progression: ProgressionService,
-    private readonly quests: QuestService,
+    private readonly achievements: AchievementSink,
   ) {}
 
   useSkill(player: Player, skill: SkillId, requestedTarget: number | null): Result {
@@ -186,7 +186,7 @@ export class CombatService {
     this.progression.grantGold(killer, gold);
     this.events.player(killer.id, { e: 'log', text: `${monster.def.name} defeated · +${gold} gold`, c: 'loot' });
     this.progression.grantXp(killer, killXp(monster.level, killer.level, monster.def.boss));
-    this.quests.onMonsterKilled(killer, monster.type);
+    this.achievements.record(killer, { kind: 'kill', monster: monster.type, level: monster.level });
     if (!monster.def.boss && this.rng.next() < TONIC_DROP_CHANCE) {
       killer.progress.tonics += 1;
       killer.touchProgress();

@@ -1,10 +1,12 @@
 import type { MonsterType } from '../game/monsters';
+import { NPC_PLACEMENTS, type NpcDef } from '../game/npcs';
 import { ValueNoise } from '../math/noise';
 import { Mulberry32, type RandomSource } from '../math/random';
 import { clamp, lerp, smoothstep } from '../math/scalar';
 import type { Vec3 } from '../math/vec';
 import { Biome } from './biomes';
 import { Block } from './blocks';
+import { LANDMARK_NAMES, type Landmark, type LandmarkId } from './landmarks';
 import { NO_GROUND, VoxelWorld, WORLD } from './voxel-world';
 
 export interface MonsterSpawn {
@@ -29,6 +31,10 @@ export interface GeneratedWorld {
   readonly lampPoints: readonly Vec3[];
   readonly waterfalls: readonly Waterfall[];
   readonly playerSpawn: Readonly<Vec3>;
+  /** Named places for stories and bounties, each marked by a small structure. */
+  readonly landmarks: readonly Landmark[];
+  /** Every character, with zone characters moved onto solid ground. */
+  readonly npcs: readonly NpcDef[];
 }
 
 interface House {
@@ -63,6 +69,8 @@ export function generateWorld(seed: number): GeneratedWorld {
   paintColumns(world, noise);
   const lampPoints = buildTown(world);
   plantTrees(world, noise);
+  const landmarks = placeLandmarks(world, lampPoints);
+  const npcs = placeNpcs(world);
   world.computeColumnExtents();
 
   return {
@@ -72,6 +80,8 @@ export function generateWorld(seed: number): GeneratedWorld {
     lampPoints,
     waterfalls: findWaterfalls(world),
     playerSpawn: { x: 0, y: TOWN_Y + 0.5, z: 5 },
+    landmarks,
+    npcs,
   };
 }
 
@@ -392,4 +402,162 @@ function findWaterfalls(world: VoxelWorld): Waterfall[] {
     }
   });
   return falls.slice(0, 4);
+}
+
+// ---------------------------------------------------------------- landmarks and characters
+
+/** Dry ground a hero can stand on, with no block in the two cells above. */
+function isStandable(world: VoxelWorld, x: number, z: number): boolean {
+  if (!world.inXZ(x, z)) return false;
+  const i = world.column(x, z);
+  const t = world.topY[i]!;
+  return (
+    t !== NO_GROUND && t >= WATER && world.edgeDistance[i]! > 2.5 &&
+    !world.isSolid(x, t + 1, z) && !world.isSolid(x, t + 2, z) && world.get(x, t + 1, z) !== Block.Water
+  );
+}
+
+/** Standable, and the square of `radius` around it is open, dry and within a block of its height. */
+function isOpenGround(world: VoxelWorld, x: number, z: number, radius: number): boolean {
+  if (!isStandable(world, x, z)) return false;
+  const t = world.topY[world.column(x, z)]!;
+  for (let dx = -radius; dx <= radius; dx++) {
+    for (let dz = -radius; dz <= radius; dz++) {
+      if (!isStandable(world, x + dx, z + dz)) return false;
+      const n = world.topY[world.column(x + dx, z + dz)]!;
+      if (Math.abs(n - t) > 1 || world.isSolid(x + dx, n + 3, z + dz)) return false;
+    }
+  }
+  return true;
+}
+
+/** The column nearest (nx, nz) within `radius` that passes `ok`; ties go to the smaller x, then z. */
+function nearest(world: VoxelWorld, nx: number, nz: number, radius: number, ok: (x: number, z: number, i: number) => boolean): { x: number; z: number } | null {
+  let best: { x: number; z: number } | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let x = Math.round(nx) - radius; x <= Math.round(nx) + radius; x++) {
+    for (let z = Math.round(nz) - radius; z <= Math.round(nz) + radius; z++) {
+      if (!world.inXZ(x, z)) continue;
+      const d = Math.hypot(x - nx, z - nz);
+      if (d > radius || d >= bestDistance || !ok(x, z, world.column(x, z))) continue;
+      best = { x, z };
+      bestDistance = d;
+    }
+  }
+  return best;
+}
+
+/** Tries each finder in turn, so a landmark exists on every seed even if its ideal spot does not. */
+function firstSpot(...finders: (() => { x: number; z: number } | null)[]): { x: number; z: number } {
+  for (const find of finders) {
+    const spot = find();
+    if (spot) return spot;
+  }
+  return { x: 0, z: 14 };
+}
+
+function landmarkAt(world: VoxelWorld, id: LandmarkId, spot: { x: number; z: number }): Landmark {
+  return { id, name: LANDMARK_NAMES[id], x: spot.x, y: world.surfaceY(spot.x, spot.z), z: spot.z };
+}
+
+function placeLandmarks(world: VoxelWorld, lamps: Vec3[]): Landmark[] {
+  return [buildSunkenPier(world, lamps), buildHollowShrine(world), buildRiftLookout(world, lamps)];
+}
+
+/** A short wooden pier running from the Reedmere shore into the lake, its far end sunk under the water. */
+function buildSunkenPier(world: VoxelWorld, lamps: Vec3[]): Landmark {
+  const waterRun = (x: number, z: number, dx: number, dz: number): number => {
+    let n = 0;
+    while (n < 5) {
+      const cx = x + dx * (n + 1);
+      const cz = z + dz * (n + 1);
+      if (!world.inXZ(cx, cz)) break;
+      const t = world.topY[world.column(cx, cz)]!;
+      if (t === NO_GROUND || t >= WATER) break;
+      n++;
+    }
+    return n;
+  };
+  let direction: readonly [number, number] = [-1, 0];
+  const shore = (x: number, z: number, i: number): boolean => {
+    if (world.biome[i] !== Biome.West || !isStandable(world, x, z) || world.topY[i]! > WATER + 1) return false;
+    for (const d of N4) {
+      if (waterRun(x, z, d[0], d[1]) >= 4) {
+        direction = d;
+        return true;
+      }
+    }
+    return false;
+  };
+  const spot = firstSpot(
+    () => nearest(world, -58, 4, 40, shore),
+    () => nearest(world, -58, 4, 40, (x, z, i) => world.biome[i] === Biome.West && isStandable(world, x, z)),
+  );
+  const found = nearest(world, spot.x, spot.z, 0, shore);
+  if (found) {
+    const [dx, dz] = direction;
+    for (let k = 1; k <= 4; k++) {
+      const x = spot.x + dx * k;
+      const z = spot.z + dz * k;
+      const deep = world.topY[world.column(x, z)]! < WATER - 1;
+      world.set(x, k > 2 && deep ? WATER - 1 : WATER, z, Block.Plank);
+    }
+    const postX = spot.x + dx * 2 + dz;
+    const postZ = spot.z + dz * 2 + dx;
+    for (let y = WATER; y <= WATER + 2; y++) world.set(postX, y, postZ, Block.Wood);
+    world.set(postX, WATER + 3, postZ, Block.Lamp);
+    lamps.push({ x: postX, y: WATER + 3, z: postZ });
+  }
+  return landmarkAt(world, 'sunken-pier', spot);
+}
+
+/** Four stone pillars around a cold pedestal in the autumn woods. */
+function buildHollowShrine(world: VoxelWorld): Landmark {
+  const spot = firstSpot(
+    () => nearest(world, 46, -12, 30, (x, z, i) => world.biome[i] === Biome.East && isOpenGround(world, x, z, 2)),
+    () => nearest(world, 46, -12, 30, (x, z, i) => world.biome[i] === Biome.East && isOpenGround(world, x, z, 1)),
+    () => nearest(world, 46, -12, 30, (x, z, i) => world.biome[i] === Biome.East && isStandable(world, x, z)),
+  );
+  const t = world.topY[world.column(spot.x, spot.z)]!;
+  if (isOpenGround(world, spot.x, spot.z, 2)) {
+    for (const [dx, dz] of [[2, 2], [2, -2], [-2, 2], [-2, -2]] as const) {
+      const base = world.topY[world.column(spot.x + dx, spot.z + dz)]!;
+      for (let y = base + 1; y <= base + 3; y++) world.set(spot.x + dx, y, spot.z + dz, Block.Cobble);
+      world.set(spot.x + dx, base + 4, spot.z + dz, Block.Stone);
+    }
+  }
+  // The pedestal and its dead lantern sit just behind the spot a hero stands on.
+  world.set(spot.x, t + 1, spot.z - 1, Block.Cobble);
+  world.set(spot.x, t + 2, spot.z - 1, Block.Wood);
+  return landmarkAt(world, 'hollow-shrine', spot);
+}
+
+/** A sandstone pillar with a lamp, on the southern cliffs facing the rift islands. */
+function buildRiftLookout(world: VoxelWorld, lamps: Vec3[]): Landmark {
+  const cliff = (x: number, z: number, i: number): boolean =>
+    world.biome[i] === Biome.South && world.edgeDistance[i]! < 10 && isOpenGround(world, x, z, 1);
+  const spot = firstSpot(
+    () => nearest(world, 38, 54, 30, cliff),
+    () => nearest(world, 38, 54, 40, (x, z, i) => world.biome[i] === Biome.South && isStandable(world, x, z)),
+  );
+  const px = spot.x - 1;
+  const pz = spot.z - 1;
+  if (world.inXZ(px, pz) && world.topY[world.column(px, pz)] !== NO_GROUND) {
+    const base = world.topY[world.column(px, pz)]!;
+    for (let y = base + 1; y <= base + 3; y++) world.set(px, y, pz, Block.Sandstone);
+    world.set(px, base + 4, pz, Block.Lamp);
+    lamps.push({ x: px, y: base + 4, z: pz });
+  }
+  return landmarkAt(world, 'rift-lookout', spot);
+}
+
+function placeNpcs(world: VoxelWorld): NpcDef[] {
+  return NPC_PLACEMENTS.map(({ snap, ...npc }) => {
+    if (!snap) return npc;
+    const spot = firstSpot(
+      () => nearest(world, npc.x, npc.z, 12, (x, z) => isOpenGround(world, x, z, 1)),
+      () => nearest(world, npc.x, npc.z, 20, (x, z) => isStandable(world, x, z)),
+    );
+    return { ...npc, x: spot.x, z: spot.z };
+  });
 }

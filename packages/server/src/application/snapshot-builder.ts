@@ -78,7 +78,7 @@ export class SnapshotBuilder {
   private encodePlayer(p: Player): EntityState {
     return {
       k: 'p', id: p.id, x: r2(p.body.x), y: r2(p.body.y), z: r2(p.body.z), yaw: r2(p.yaw),
-      hp: Math.ceil(p.hp), mhp: p.maxHp, lv: p.level, nm: p.name, look: p.look, dead: p.dead,
+      hp: Math.ceil(p.hp), mhp: p.maxHp, lv: p.level, nm: p.name, look: p.look, dead: p.dead, ti: p.progress.title,
     };
   }
 

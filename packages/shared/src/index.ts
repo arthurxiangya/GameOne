@@ -8,6 +8,7 @@ export * from './math/vec';
 export * from './world/blocks';
 export * from './world/biomes';
 export * from './world/voxel-world';
+export * from './world/landmarks';
 export * from './world/worldgen';
 export * from './world/mesher';
 
@@ -18,7 +19,9 @@ export * from './physics/player-physics';
 export * from './game/stats';
 export * from './game/skills';
 export * from './game/monsters';
-export * from './game/quests';
+export * from './game/story';
+export * from './game/bounties';
+export * from './game/titles';
 export * from './game/npcs';
 export * from './game/economy';
 export * from './game/progress';
