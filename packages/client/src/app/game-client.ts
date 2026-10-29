@@ -1,4 +1,5 @@
 import {
+  LANTERN_POSITION,
   MONSTERS,
   MOUNTS,
   MOUNT_CALL_SECONDS,
@@ -21,6 +22,7 @@ import {
   type InputFrame,
   type Medal,
   type ModeState,
+  type SiegeState,
   type MoveIntent,
   type NpcDef,
   type PlayerProgress,
@@ -151,6 +153,8 @@ export class GameClient {
   private callLeft = 0;
   /** What the hero is doing in a game mode, from the server. */
   private mode: ModeState | null = null;
+  /** Lantern Night, as the server broadcasts it. */
+  private siege: SiegeState | null = null;
   private medals: Readonly<Record<Medal, number>> | undefined;
   private nearNpc: NpcDef | null = null;
   private frameCount = 0;
@@ -337,7 +341,8 @@ export class GameClient {
     this.boards.close();
     this.companions.clear();
     this.mode = null;
-    this.modeBar.update(null, 0, null);
+    this.siege = null;
+    this.modeBar.update(null, null, 0, null);
     this.raceMarkers.update(null, 0);
     this.chat.close();
     this.setTarget(null);
@@ -359,6 +364,7 @@ export class GameClient {
       case 'snapshot': this.onSnapshot(msg); break;
       case 'progress': this.onProgress(msg.p); break;
       case 'mode': this.mode = msg.m; break;
+      case 'siege': this.siege = msg.s; break;
       case 'boards': this.boards.show(msg.boards, this.progress?.name ?? ''); break;
       case 'chat': this.chat.chat(msg.from, msg.text); break;
       case 'system': this.chat.system(msg.text, 'sys'); break;
@@ -695,7 +701,7 @@ export class GameClient {
 
     const focus = this.phase === 'playing' ? this.renderPos : { x: 0, y: 10, z: 0 };
     this.sky.update(this.timeOfDay, focus, this.ctx.camera, dt);
-    this.terrain.update(this.now, dt, this.ctx.camera, this.ctx.fog.far, this.sky.night);
+    this.terrain.update(this.now, dt, this.ctx.camera, this.ctx.fog.far, this.sky.night, this.sky.townLit);
     this.effects.update(dt);
     this.ctx.render();
   };
@@ -732,7 +738,7 @@ export class GameClient {
     const lift = this.companions.update(this.selfId, { ...this.renderPos, yaw: local.yaw }, this.self?.mt ?? null, this.progress?.pet ?? null, dead, dt, this.now);
     this.views.update(this.selfId, { ...this.renderPos, y: this.renderPos.y + lift, yaw: local.yaw, dead, attacking: false, seated: lift > 0 }, dt, this.now);
     this.updateCallBar(elapsed);
-    this.updateMode();
+    this.updateMode(dt);
     const lamp = this.views.heroLampPosition();
     if (lamp) this.sky.heroLight.position.set(lamp.x, lamp.y, lamp.z);
     this.sky.heroLight.intensity = 10 * this.sky.night;
@@ -838,8 +844,15 @@ export class GameClient {
     return coursePoints(this.generated.raceCourse)[mode.next] ?? null;
   }
 
-  private updateMode(): void {
-    const target = this.nextRacePoint();
+  /** The fountain, while a siege is on and the hero is too far away to help. */
+  private siegeRallyPoint(): Vec3 | null {
+    const phase = this.siege?.phase;
+    if (phase !== 'warning' && phase !== 'wave' && phase !== 'break') return null;
+    return Math.hypot(this.renderPos.x - LANTERN_POSITION.x, this.renderPos.z - LANTERN_POSITION.z) > 30 ? LANTERN_POSITION : null;
+  }
+
+  private updateMode(dt: number): void {
+    const target = this.nextRacePoint() ?? (this.mode ? null : this.siegeRallyPoint());
     let bearing: number | null = null;
     if (target) {
       const yaw = this.cameraRig.yaw;
@@ -847,9 +860,11 @@ export class GameClient {
       const dz = target.z - this.renderPos.z;
       bearing = Math.atan2(dx * Math.cos(yaw) - dz * Math.sin(yaw), -dx * Math.sin(yaw) - dz * Math.cos(yaw));
     }
-    const count = this.modeBar.update(this.mode, this.clock.serverNow(this.now), bearing);
+    const count = this.modeBar.update(this.mode, this.siege, this.clock.serverNow(this.now), bearing);
     if (count !== null) this.notices.banner(count > 0 ? String(count) : 'Go!', count > 0 ? 'Ember Run' : 'Run!');
     this.raceMarkers.update(this.mode?.kind === 'race' ? this.mode.next : null, this.now);
+    const lit = this.siege?.phase === 'lost' ? 0 : 1;
+    this.sky.townLit += (lit - this.sky.townLit) * Math.min(1, dt * 1.5);
   }
 
   private updateCallBar(elapsed: number): void {
@@ -886,7 +901,7 @@ export class GameClient {
   }
 
   private computeQuestMark(): { x: number; z: number } | null {
-    const racing = this.nextRacePoint();
+    const racing = this.nextRacePoint() ?? this.siegeRallyPoint();
     if (racing) return racing;
     const p = this.progress;
     if (!p || !this.generated) return null;
@@ -906,6 +921,12 @@ export class GameClient {
       } else markers.push({ x: e.pose.x, z: e.pose.z, kind: 'ally' });
     }
     for (const npc of this.npcs) markers.push({ x: npc.x, z: npc.z, kind: 'npc' });
+    if (this.siege?.phase === 'wave' && this.generated) {
+      for (const i of this.siege.gates) {
+        const gate = this.generated.siegeGates[i];
+        if (gate) markers.push({ x: gate.x, z: gate.z, kind: 'boss' });
+      }
+    }
     return markers;
   }
 

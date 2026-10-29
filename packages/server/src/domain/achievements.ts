@@ -11,7 +11,9 @@ export type Achievement =
   | { readonly kind: 'visit'; readonly place: LandmarkId }
   | { readonly kind: 'greet'; readonly npc: NpcId }
   /** Finished an Ember Run, with or without a medal. */
-  | { readonly kind: 'race'; readonly medal: Medal | null };
+  | { readonly kind: 'race'; readonly medal: Medal | null }
+  /** Defended Emberhold through a Lantern Night; `won` once the Gloom Knight fell. */
+  | { readonly kind: 'siege'; readonly won: boolean };
 
 export interface AchievementSink {
   record(player: Player, achievement: Achievement): void;

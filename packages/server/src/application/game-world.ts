@@ -1,5 +1,6 @@
 import {
   ACTION_SERVICE,
+  MONSTERS,
   NPC_INTERACT_RANGE,
   PHYSICS,
   REGEN,
@@ -20,6 +21,7 @@ import {
   type Landmark,
   type ModeState,
   type MonsterAnim,
+  type MonsterType,
   type MountId,
   type NpcAction,
   type NpcDef,
@@ -28,12 +30,13 @@ import {
   type PlayerProgress,
   type RandomSource,
   type ShopItemId,
+  type SiegeState,
   type SkillId,
   type TitleId,
   type Vec3,
   type VoxelWorld,
 } from '@lanternwood/shared';
-import { Monster } from '../domain/entities/monster';
+import { Monster, type MonsterOptions } from '../domain/entities/monster';
 import { Player } from '../domain/entities/player';
 import { EventBuffer, type RoutedEvent } from '../domain/events';
 import type { Calendar, Clock } from '../domain/ports';
@@ -49,6 +52,7 @@ import { ShopService } from '../domain/services/shop-service';
 import { StoryService } from '../domain/services/story-service';
 import type { LeaderboardSink } from './leaderboards';
 import { EmberRun } from './modes/ember-run';
+import { LanternNight } from './modes/lantern-night';
 import type { GameMode, ModeHost } from './modes/game-mode';
 import { SpatialHash } from './spatial-hash';
 
@@ -96,6 +100,8 @@ const SIMULATION_RADIUS = 90;
 const GRID_CELL = 16;
 /** Landmark visits and the calendar are checked this often, in ticks. */
 const SLOW_CHECK_TICKS = 10;
+/** Monsters spawned by modes stay this long after dying, so clients can play the death animation. */
+const TRANSIENT_CORPSE_SECONDS = 1.6;
 
 /**
  * The authoritative simulation. Owns every entity, applies validated player input and
@@ -104,6 +110,7 @@ const SLOW_CHECK_TICKS = 10;
  */
 export class GameWorld implements CombatWorld, AiWorld {
   readonly emberRun: EmberRun;
+  readonly lanternNight: LanternNight;
   readonly raceCourse: GeneratedWorld['raceCourse'];
   readonly voxels: VoxelWorld;
   readonly seed: number;
@@ -156,13 +163,21 @@ export class GameWorld implements CombatWorld, AiWorld {
       progression,
       boards: options.boards ?? noBoards,
       calendar: this.calendar,
+      rng,
+      dayLengthSeconds: options.dayLengthSeconds,
       now: () => this.simTime,
+      timeOfDay: () => this.dayTime,
+      players: () => this.playersById.values(),
       teleport: (player, to) => this.teleport(player, to),
       modeChanged: (player) => void (player.modeDirty = true),
+      spawnMonster: (type, level, x, z, monsterOptions) => this.spawnMonster(type, level, x, z, monsterOptions),
+      removeMonster: (m) => void this.monstersById.delete(m.id),
+      grantPet: (player, pet) => this.pets.grant(player, pet),
     };
     this.raceCourse = generated.raceCourse;
     this.emberRun = new EmberRun(host, generated.raceCourse);
-    this.modes = [this.emberRun];
+    this.lanternNight = new LanternNight(host, generated.siegeGates);
+    this.modes = [this.emberRun, this.lanternNight];
     this.combat = new CombatService(this, rng, this.clock, this.events, progression, this.tracker);
     this.ai = new MonsterAi(this, this.combat, this.events, rng);
 
@@ -321,8 +336,9 @@ export class GameWorld implements CombatWorld, AiWorld {
 
     this.combat.update(dt);
     for (const m of this.monstersById.values()) {
-      const asleep = m.alive && m.mode === 'idle' && this.playerGrid.query(m.x, m.z, SIMULATION_RADIUS).length === 0;
+      const asleep = m.alive && m.mode === 'idle' && !m.goal && this.playerGrid.query(m.x, m.z, SIMULATION_RADIUS).length === 0;
       if (!asleep) this.ai.update(m, dt);
+      if (m.transient && !m.alive && m.deadFor > TRANSIENT_CORPSE_SECONDS) this.monstersById.delete(m.id);
     }
     this.monsterGrid.rebuild(this.monstersById.values());
     for (const mode of this.modes) mode.step(dt);
@@ -349,6 +365,33 @@ export class GameWorld implements CombatWorld, AiWorld {
 
   ignoredByMonsters(player: Player): boolean {
     return this.modes.some((mode) => mode.ignoredByMonsters?.(player));
+  }
+
+  monsterHit(monster: Monster, attacker: Player | null, amount: number, killed: boolean): void {
+    for (const mode of this.modes) mode.onMonsterHit?.(monster, attacker, amount, killed);
+  }
+
+  strikeGoal(monster: Monster, amount: number): void {
+    for (const mode of this.modes) mode.onGoalStruck?.(monster, amount);
+  }
+
+  /** The current siege for everyone, or null. */
+  siegeStatus(): SiegeState | null {
+    return this.lanternNight.state();
+  }
+
+  /** A siege update to broadcast this tick, or `undefined` if nothing changed. */
+  takeSiegeUpdate(): SiegeState | null | undefined {
+    return this.lanternNight.takeUpdate();
+  }
+
+  /** Adds a monster for a mode. It joins the spatial grid at the end of the tick. */
+  spawnMonster(type: MonsterType, level: number, x: number, z: number, options: MonsterOptions = {}): Monster {
+    const def = MONSTERS[type];
+    const m = new Monster(this.nextEntityId++, type, level, x, z, this.voxels.surfaceY(x, z), def.scale ?? 1, options);
+    m.yaw = Math.atan2(-x, -z);
+    this.monstersById.set(m.id, m);
+    return m;
   }
 
   private callMount(player: Player): Result {

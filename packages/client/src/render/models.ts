@@ -212,6 +212,55 @@ const MONSTER_BUILDERS: Readonly<Record<MonsterType, () => ModelRig>> = {
   },
   golem: () => golem({ body: 0x8fb4c6, head: 0x9cc2d4, arm: 0x7fa2b4, leg: 0x6f8fa0, eye: 0x7ff5ff }, false),
   warden: () => golem({ body: 0x6a72b8, head: 0x7d86c8, arm: 0x5b62a0, leg: 0x4c528a, eye: 0xffb86b }, true),
+  wisp: () => {
+    const root = new THREE.Group();
+    const body = joint(root, 0, 0, 0);
+    part(body, 0.46, 0.46, 0.46, 0x7b4fd6, 0, 0.95, 0, true);
+    part(body, 0.3, 0.3, 0.3, 0xd9c2ff, 0, 0.95, 0.06, true);
+    part(body, 0.26, 0.26, 0.3, 0x5a3aa8, 0, 0.82, -0.36, true);
+    part(body, 0.16, 0.16, 0.28, 0x452c86, 0, 0.72, -0.62, true);
+    return { root, body, legs: [], arms: [], armR: null, armL: null, lamp: null, hop: true, splay: false, height: MONSTERS.wisp.height };
+  },
+  shade: () => {
+    const root = new THREE.Group();
+    const body = joint(root, 0, 0, 0);
+    const legL = joint(body, -0.16, 0.6, 0);
+    const legR = joint(body, 0.16, 0.6, 0);
+    part(legL, 0.2, 0.6, 0.22, 0x1c1628, 0, -0.3, 0);
+    part(legR, 0.2, 0.6, 0.22, 0x1c1628, 0, -0.3, 0);
+    part(body, 0.62, 0.8, 0.38, 0x2b2238, 0, 1.0, 0);
+    part(body, 0.7, 0.3, 0.44, 0x2b2238, 0, 0.62, -0.02);
+    part(body, 0.44, 0.42, 0.42, 0x221a30, 0, 1.6, 0.02);
+    part(body, 0.52, 0.2, 0.5, 0x2b2238, 0, 1.86, 0);
+    for (const s of [-1, 1]) part(body, 0.09, 0.05, 0.02, 0xc9a3ff, s * 0.1, 1.62, 0.235, true);
+    const armL = joint(body, -0.4, 1.32, 0);
+    const armR = joint(body, 0.4, 1.32, 0);
+    part(armL, 0.14, 0.7, 0.16, 0x231b31, 0, -0.32, 0);
+    part(armR, 0.14, 0.7, 0.16, 0x231b31, 0, -0.32, 0);
+    part(armL, 0.06, 0.18, 0.06, 0x9a6cff, 0, -0.74, 0.04, true);
+    part(armR, 0.06, 0.18, 0.06, 0x9a6cff, 0, -0.74, 0.04, true);
+    return { root, body, legs: [legL, legR], arms: [armL, armR], armR: null, armL: null, lamp: null, hop: false, splay: false, height: MONSTERS.shade.height };
+  },
+  gloomknight: () => {
+    const root = new THREE.Group();
+    const body = joint(root, 0, 0, 0);
+    const legL = joint(body, -0.22, 0.7, 0);
+    const legR = joint(body, 0.22, 0.7, 0);
+    part(legL, 0.3, 0.7, 0.34, 0x2a2436, 0, -0.35, 0);
+    part(legR, 0.3, 0.7, 0.34, 0x2a2436, 0, -0.35, 0);
+    part(body, 0.9, 0.9, 0.56, 0x3b3350, 0, 1.15, 0);
+    part(body, 1.1, 0.24, 0.62, 0x4a4064, 0, 1.6, 0);
+    part(body, 0.56, 0.52, 0.52, 0x302a42, 0, 2.0, 0.02);
+    part(body, 0.42, 0.08, 0.04, 0xffb04a, 0, 2.02, 0.29, true);
+    for (const x of [-0.2, 0, 0.2]) part(body, 0.1, 0.22, 0.1, 0xffb04a, x, 2.36, 0.02, true);
+    part(body, 0.8, 0.9, 0.06, 0x1c1628, 0, 1.2, -0.33);
+    const armL = joint(body, -0.6, 1.5, 0);
+    const armR = joint(body, 0.6, 1.5, 0);
+    part(armL, 0.24, 0.8, 0.26, 0x3b3350, 0, -0.38, 0);
+    part(armR, 0.24, 0.8, 0.26, 0x3b3350, 0, -0.38, 0);
+    part(armR, 0.1, 0.1, 1.3, 0x9a6cff, 0, -0.78, 0.6, true);
+    return { root, body, legs: [legL, legR], arms: [armL, armR], armR: null, armL: null, lamp: null, hop: false, splay: false, height: MONSTERS.gloomknight.height };
+  },
 };
 
 export const buildMonster = (type: MonsterType): ModelRig => MONSTER_BUILDERS[type]();

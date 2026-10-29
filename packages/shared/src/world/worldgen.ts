@@ -38,6 +38,8 @@ export interface GeneratedWorld {
   readonly npcs: readonly NpcDef[];
   /** The Ember Run: start line in Emberhold and checkpoints through every zone. */
   readonly raceCourse: RaceCourse;
+  /** Where the Gloom enters on Lantern Night: the four roads, north, east, south and west. */
+  readonly siegeGates: readonly Vec3[];
 }
 
 interface House {
@@ -75,6 +77,10 @@ export function generateWorld(seed: number): GeneratedWorld {
   const landmarks = placeLandmarks(world, lampPoints);
   const npcs = placeNpcs(world);
   const raceCourse = placeRaceCourse(world);
+  const siegeGates = ([[0, -30], [30, 0], [0, 30], [-30, 0]] as const).map(([nx, nz]) => {
+    const spot = nearest(world, nx, nz, 8, (x, z) => isStandable(world, x, z)) ?? { x: nx, z: nz };
+    return { x: spot.x, y: world.surfaceY(spot.x, spot.z), z: spot.z };
+  });
   world.computeColumnExtents();
 
   return {
@@ -87,6 +93,7 @@ export function generateWorld(seed: number): GeneratedWorld {
     landmarks,
     npcs,
     raceCourse,
+    siegeGates,
   };
 }
 

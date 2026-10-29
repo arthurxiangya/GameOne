@@ -75,6 +75,10 @@ export class StoryService {
       const step = currentStep(chain, cp);
       if (!step) continue;
       const o = step.objective;
+      if (a.kind === 'siege') {
+        if (o.kind === 'event' && (o.event === 'siege' || (o.event === 'gloomKnight' && a.won))) this.objectiveMet(player, chain);
+        continue;
+      }
       if (a.kind === 'visit') {
         if (o.kind === 'visit' && o.place === a.place) this.objectiveMet(player, chain);
         continue;

@@ -29,6 +29,8 @@ export class SkySystem {
   readonly townLight = new THREE.PointLight(0xffb04a, 0, 18, 2);
   /** 0 at noon, 1 at midnight. */
   night = 0;
+  /** 1 normally, eased to 0 while the Great Lantern is dark. */
+  townLit = 1;
 
   private readonly keys = SKY_KEYS.map(([t, top, hor]) => ({ t, top: new THREE.Color(top), hor: new THREE.Color(hor) }));
   private readonly uniforms = { uTop: { value: new THREE.Color() }, uHor: { value: new THREE.Color() }, uLow: { value: new THREE.Color() } };
@@ -128,7 +130,7 @@ export class SkySystem {
     this.moon.intensity = 0.42 * PI * smoothstep(-0.03, 0.22, -elevation);
     this.hemi.intensity = (0.28 + 0.3 * day) * PI;
     this.hemi.color.copy(this.hemiNight).lerp(this.hemiDay, day);
-    this.townLight.intensity = 70 * this.night;
+    this.townLight.intensity = 70 * this.night * (0.1 + 0.9 * this.townLit);
     this.starMaterial.opacity = 0.9 * this.night;
 
     this.dome.position.copy(camera.position);

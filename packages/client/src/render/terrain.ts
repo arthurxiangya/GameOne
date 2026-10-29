@@ -96,14 +96,15 @@ export class TerrainRenderer {
     }
   }
 
-  update(now: number, dt: number, camera: THREE.Camera, drawDistance: number, night: number): void {
+  /** `lit` dims the lamp glow (0 when the Great Lantern has gone dark on a lost Lantern Night). */
+  update(now: number, dt: number, camera: THREE.Camera, drawDistance: number, night: number, lit = 1): void {
     for (const c of this.chunks) {
       const p = (now - c.born) / RISE_SECONDS;
       c.group.position.y = p < 1 && !this.reduceMotion ? -RISE_DEPTH * (1 - easeOutCubic(Math.max(0, p))) : 0;
       c.group.visible = Math.hypot(camera.position.x - c.x, camera.position.z - c.z) < drawDistance + 16;
     }
     this.glow.color.setScalar(0.72 + 0.28 * night);
-    if (this.lampGlow) (this.lampGlow.material as THREE.PointsMaterial).opacity = 0.75 * night;
+    if (this.lampGlow) (this.lampGlow.material as THREE.PointsMaterial).opacity = 0.75 * night * (0.15 + 0.85 * lit);
     this.stepWaterfalls(dt);
   }
 

@@ -1,5 +1,6 @@
-import type { ModeState, SkillId, Vec3 } from '@lanternwood/shared';
+import type { ModeState, MonsterType, PetId, RandomSource, SkillId, Vec3 } from '@lanternwood/shared';
 import type { AchievementSink } from '../../domain/achievements';
+import type { Monster, MonsterOptions } from '../../domain/entities/monster';
 import type { Player } from '../../domain/entities/player';
 import type { EventSink } from '../../domain/events';
 import type { Calendar } from '../../domain/ports';
@@ -30,6 +31,10 @@ export interface GameMode {
   ignoredByMonsters?(player: Player): boolean;
   /** True while the hero's movement input is ignored (a start countdown). */
   frozen?(player: Player): boolean;
+  /** A hero hit a monster; `killed` if it died. */
+  onMonsterHit?(monster: Monster, attacker: Player | null, amount: number, killed: boolean): void;
+  /** A monster with a goal struck it. */
+  onGoalStruck?(monster: Monster, amount: number): void;
 }
 
 /** What modes may do to the world. Implemented by GameWorld. */
@@ -39,9 +44,17 @@ export interface ModeHost {
   readonly progression: ProgressionService;
   readonly boards: LeaderboardSink;
   readonly calendar: Calendar;
+  readonly rng: RandomSource;
+  readonly dayLengthSeconds: number;
   /** Simulation time in seconds. */
   now(): number;
+  /** Time of day in [0, 1). */
+  timeOfDay(): number;
+  players(): Iterable<Player>;
   teleport(player: Player, to: Readonly<Vec3>): void;
   /** The hero's mode state changed; their client is told after this tick. */
   modeChanged(player: Player): void;
+  spawnMonster(type: MonsterType, level: number, x: number, z: number, options: MonsterOptions): Monster;
+  removeMonster(monster: Monster): void;
+  grantPet(player: Player, pet: PetId): void;
 }

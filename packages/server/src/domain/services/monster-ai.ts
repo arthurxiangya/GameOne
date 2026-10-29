@@ -11,7 +11,12 @@ export interface AiWorld {
   playersNear(x: number, z: number, radius: number): readonly Player[];
   /** Heroes monsters leave alone, such as runners on the Ember Run. */
   ignoredByMonsters(player: Player): boolean;
+  /** A monster with a goal reached it and struck (the Great Lantern on Lantern Night). */
+  strikeGoal(m: Monster, amount: number): void;
 }
+
+/** Monsters with a goal strike it from this close. */
+const GOAL_REACH = 4.6;
 
 const MAX_CLIMB = 1.6;
 const WANDER_RADIUS = 5;
@@ -36,6 +41,12 @@ export class MonsterAi {
     }
     m.moving = false;
     this.updateSlam(m, dt);
+    if (m.goal) {
+      this.updateMarcher(m, m.goal, dt);
+      const ground = this.world.surfaceY(m.x, m.z);
+      if (ground !== NO_GROUND) m.y += (ground - m.y) * Math.min(1, dt * 12);
+      return;
+    }
     const target = this.selectTarget(m);
     if (m.mode === 'chase' && (!target || m.distanceFromSpawn > m.def.leash)) {
       m.mode = 'return';
@@ -50,8 +61,45 @@ export class MonsterAi {
     if (ground !== NO_GROUND) m.y += (ground - m.y) * Math.min(1, dt * 12);
   }
 
+  /**
+   * Monsters a mode sends against a goal: hunt heroes nearby (unless goal-only), otherwise march
+   * on the goal and strike it once there.
+   */
+  private updateMarcher(m: Monster, goal: { readonly x: number; readonly z: number }, dt: number): void {
+    let target = m.goalOnly ? null : this.selectTarget(m);
+    // Marchers give up on heroes who lead them far away, and go back to the goal.
+    if (target && Math.hypot(target.body.x - m.x, target.body.z - m.z) > m.def.aggroRange * 2) {
+      m.threat.delete(target.id);
+      target = null;
+    }
+    if (target) {
+      this.chase(m, target, dt);
+      return;
+    }
+    m.mode = 'idle';
+    m.targetId = null;
+    const dx = goal.x - m.x;
+    const dz = goal.z - m.z;
+    const d = Math.hypot(dx, dz) || 1;
+    m.attackCooldown -= dt;
+    if (d > GOAL_REACH) {
+      m.windup = 0;
+      this.moveToward(m, dx / d, dz / d, m.def.speed, dt);
+      return;
+    }
+    m.yaw = lerpAngle(m.yaw, Math.atan2(dx, dz), damp(10, dt));
+    if (m.windup > 0) {
+      m.windup -= dt;
+      if (m.windup <= 0) this.world.strikeGoal(m, m.damage * (0.85 + this.rng.next() * 0.3));
+    } else if (m.attackCooldown <= 0) {
+      m.windup = m.def.windup;
+      m.attackCooldown = m.def.attackInterval;
+    }
+  }
+
   private updateDead(m: Monster, dt: number): void {
     m.deadFor += dt;
+    if (m.transient) return;
     m.respawnIn -= dt;
     if (m.respawnIn > 0) return;
     const blocked = this.world.playersNear(m.spawnX, m.spawnZ, RESPAWN_CLEARANCE).length > 0;
@@ -178,7 +226,7 @@ export class MonsterAi {
     m.slam = null;
     this.events.area(x, z, { e: 'slam', x, y, z, r: SLAM.radius });
     for (const p of this.world.playersNear(x, z, SLAM.radius)) {
-      if (!p.dead && Math.abs(p.body.y - y) < 4) this.combat.damagePlayer(p, SLAM.damage + this.rng.next() * 12, m, 'slam');
+      if (!p.dead && Math.abs(p.body.y - y) < 4) this.combat.damagePlayer(p, m.slamDamage + this.rng.next() * 12, m, 'slam');
     }
   }
 }

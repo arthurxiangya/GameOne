@@ -3,6 +3,7 @@ import {
   CRIT_CHANCE,
   CRIT_MULTIPLIER,
   MEND_FRACTION,
+  SIEGE,
   SKILLS,
   TONIC_DROP_CHANCE,
   activePetBonus,
@@ -27,6 +28,8 @@ export interface CombatWorld {
   monstersNear(x: number, z: number, radius: number): readonly Monster[];
   /** A reason a mode forbids this skill right now (no fighting during a run), or null. */
   skillBlocked(player: Player, skill: SkillId): string | null;
+  /** A hero hit a monster (modes count damage and kills). */
+  monsterHit(monster: Monster, attacker: Player | null, amount: number, killed: boolean): void;
 }
 
 interface PendingHit {
@@ -94,7 +97,9 @@ export class CombatService {
     if (attacker) monster.addThreat(attacker.id, amt);
     monster.provoke();
     this.events.area(monster.x, monster.z, { e: 'dmg', id: monster.id, amt, crit });
-    if (monster.hp <= 0) this.killMonster(monster, attacker);
+    const killed = monster.hp <= 0;
+    if (killed) this.killMonster(monster, attacker);
+    this.world.monsterHit(monster, attacker, amt, killed);
   }
 
   damagePlayer(player: Player, amount: number, source: Monster, kind: 'hit' | 'slam'): void {
@@ -189,7 +194,8 @@ export class CombatService {
     monster.die();
     this.events.area(monster.x, monster.z, { e: 'die', id: monster.id });
     if (!killer) return;
-    const bonus = (kind: 'gold' | 'xp'): number => 1 + activePetBonus(killer.progress, kind);
+    const blessing = killer.blessedUntil > this.clock.now() ? SIEGE.blessing : 0;
+    const bonus = (kind: 'gold' | 'xp'): number => 1 + activePetBonus(killer.progress, kind) + (kind === 'xp' ? blessing : 0);
     const gold = Math.round(killGold(monster.level, monster.def.boss, this.rng.next()) * bonus('gold'));
     this.progression.grantGold(killer, gold);
     this.events.player(killer.id, { e: 'log', text: `${monster.def.name} defeated · +${gold} gold`, c: 'loot' });

@@ -85,6 +85,8 @@ export function objectiveSpot(
   const o = step.objective;
   if (o.kind === 'talk') return npcSpot(o.npc);
   if (o.kind === 'visit') return generated.landmarks.find((l) => l.id === o.place) ?? null;
+  // Lantern Night happens at the fountain.
+  if (o.kind === 'event') return { x: 0, z: 0 };
   let candidates: Spot[] = liveMonsters.filter((m) => m.type === o.monster);
   if (candidates.length === 0) candidates = generated.monsterSpawns.filter((s) => s.type === o.monster);
   let best: Spot | null = null;

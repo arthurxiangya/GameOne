@@ -1,4 +1,4 @@
-# Wire protocol (v5)
+# Wire protocol (v6)
 
 All messages are JSON text frames on `ws(s)://<host>/ws`, discriminated by the `t` field. Types live in [`packages/shared/src/protocol/messages.ts`](../packages/shared/src/protocol/messages.ts). Client messages are validated by `parseClientMessage`; anything else is rejected with an `error`. Field names are short because snapshots go out twenty times a second.
 
@@ -41,6 +41,7 @@ client                                   server
 | `snapshot` | `tick`, `st`, `day`, `ack`, `you`, `ents`, `ev` | See below. |
 | `mode` | `m` | Your mode state changed: `{kind: 'race', phase, startsAt, next, total}` during an Ember Run (`startsAt` is server time; `next` indexes `coursePoints`), or `null`. |
 | `boards` | `boards` | The leaderboards: `{id, entries: [{name, value, at, detail?}]}` for `race` (seconds, lower is better), `rift` and `duel`. |
+| `siege` | `s` | Lantern Night, sent to everyone: `{phase, wave, waves, lantern, lanternMax, remaining, endsAt, gates}` while a siege is on (`phase` is `warning`, `wave`, `break`, `won` or `lost`; `gates` index the generated `siegeGates`), and `null` when it clears. Sent on join if one is on; Lantern health updates at most 4 times a second. |
 | `progress` | `p` | Your persistent progress, sent whenever it changes: level, gold and tonics, each story chain's step and state, today's bounties, Ember Marks and titles. Bounties are sent as ids; `bountyFromId` in `shared` rebuilds them. |
 | `chat` | `from`, `text` | Broadcast to everyone online. |
 | `system` | `text` | Join and leave announcements. |
@@ -54,7 +55,7 @@ client                                   server
 - `you` — your full-precision physics body plus `hp`, `mhp`, `mp`, `mmp`, `dead`, `cd` (remaining cooldown per skill), `mt` (the mount you ride, or `null`) and `call` (seconds left calling a mount). Predict movement with `stepPlayer(..., mountSpeed(mt))`.
 - `ents` — delta-encoded entities within the interest radius. The first time an entity is sent to you it arrives in full:
   - Player: `{k:'p', id, x, y, z, yaw, hp, mhp, lv, nm, look, dead, ti, mt, pet}` where `ti` is the title shown under the name, `mt` the mount being ridden and `pet` the pet following them (each `null` if none). Clients draw the pet trailing its hero; the server never simulates it.
-  - Monster: `{k:'m', id, x, y, z, yaw, hp, mhp, lv, ty, sc, st}` where `st` is `idle`, `move`, `attack` or `dead`.
+  - Monster: `{k:'m', id, x, y, z, yaw, hp, mhp, lv, ty, sc, st}` where `st` is `idle`, `move`, `attack` or `dead`. `ty` includes the Gloom (`wisp`, `shade`, `gloomknight`), which only appear on Lantern Night and are removed after their death animation.
 
   After that, only `id` plus the fields that changed since your previous snapshot are sent (for example `{id: 12, x: 4.31, z: -7.02}`). An entity that changed nothing is left out entirely. Apply patches on top of the known state (`applyEntityUpdates` in `shared`).
 - `gone` — ids of entities that left your area of interest or despawned. Forget them.
@@ -101,3 +102,4 @@ Any incompatible change bumps `PROTOCOL_VERSION`. Older clients are rejected at 
 | 3 | Story chains, daily bounties, Ember Marks and titles: `npc` gains `arg`, new `title` message, `ti` on players, `story` event |
 | 4 | Mounts and pets: `mount`, `choose` and `petName` messages; `mt` and `call` in `you`; `mt` and `pet` on players; `banner` event |
 | 5 | Ember Run and leaderboards: `npc` action `race`, `quit` and `boards` messages, `mode` and `boards` replies |
+| 6 | Lantern Night: `siege` broadcast, Gloom monster types, story `event` objectives |

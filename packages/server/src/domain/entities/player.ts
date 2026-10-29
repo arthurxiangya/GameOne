@@ -40,6 +40,8 @@ export class Player {
   riding: MountId | null = null;
   /** Seconds left calling a mount, or 0. */
   calling = 0;
+  /** Simulation time until which the Lantern's Blessing adds kill XP. */
+  blessedUntil = 0;
 
   constructor(
     readonly id: number,

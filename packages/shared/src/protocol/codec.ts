@@ -14,7 +14,7 @@ export function decodeJson(text: string, maxBytes: number): unknown {
 
 /** Every server message type. A Record, so adding a type without listing it here fails to compile. */
 const SERVER_TYPES: Readonly<Record<ServerMessageType, true>> = {
-  welcome: true, reject: true, snapshot: true, progress: true, mode: true, boards: true, chat: true, system: true, error: true, pong: true,
+  welcome: true, reject: true, snapshot: true, progress: true, mode: true, boards: true, siege: true, chat: true, system: true, error: true, pong: true,
 };
 
 /**

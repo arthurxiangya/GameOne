@@ -37,9 +37,11 @@ export interface HeroRecords {
   raceBest: number | null;
   /** Day of the last Ember Run medal reward. */
   raceDay: number;
+  /** Lantern Nights won. */
+  nightsWon: number;
 }
 
-export const newRecords = (): HeroRecords => ({ raceBest: null, raceDay: -1 });
+export const newRecords = (): HeroRecords => ({ raceBest: null, raceDay: -1, nightsWon: 0 });
 
 export const newProgress = (name: string): PlayerProgress => ({
   name,

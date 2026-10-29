@@ -1,4 +1,17 @@
-import { MONSTERS, monsterDamage, monsterMaxHp, type MonsterDef, type MonsterType } from '@lanternwood/shared';
+import { MONSTERS, SLAM, monsterDamage, monsterMaxHp, type MonsterDef, type MonsterType } from '@lanternwood/shared';
+
+/** For monsters a mode spawns: stat overrides, and where they march. */
+export interface MonsterOptions {
+  readonly maxHp?: number;
+  readonly damage?: number;
+  readonly slamDamage?: number;
+  /** Never respawns; removed from the world once its corpse has been seen. */
+  readonly transient?: boolean;
+  /** Marches here when it has nobody to fight (the Great Lantern). */
+  readonly goal?: { readonly x: number; readonly z: number };
+  /** Ignores heroes entirely and only attacks its goal. */
+  readonly goalOnly?: boolean;
+}
 
 export type MonsterMode = 'idle' | 'chase' | 'return' | 'dead';
 
@@ -13,6 +26,10 @@ export class Monster {
   readonly def: MonsterDef;
   readonly maxHp: number;
   readonly damage: number;
+  readonly slamDamage: number;
+  readonly transient: boolean;
+  readonly goal: { readonly x: number; readonly z: number } | null;
+  readonly goalOnly: boolean;
   x: number;
   y: number;
   z: number;
@@ -41,10 +58,15 @@ export class Monster {
     readonly spawnZ: number,
     spawnY: number,
     readonly scale: number,
+    options: MonsterOptions = {},
   ) {
     this.def = MONSTERS[type];
-    this.maxHp = monsterMaxHp(type, level);
-    this.damage = monsterDamage(type, level);
+    this.maxHp = options.maxHp ?? monsterMaxHp(type, level);
+    this.damage = options.damage ?? monsterDamage(type, level);
+    this.slamDamage = options.slamDamage ?? SLAM.damage;
+    this.transient = options.transient ?? false;
+    this.goal = options.goal ?? null;
+    this.goalOnly = options.goalOnly ?? false;
     this.hp = this.maxHp;
     this.x = spawnX;
     this.y = spawnY;
@@ -74,8 +96,9 @@ export class Monster {
     this.threat.set(playerId, (this.threat.get(playerId) ?? 0) + amount);
   }
 
-  /** Being hit wakes a passive or returning monster. */
+  /** Being hit wakes a passive or returning monster. Goal-only monsters keep marching. */
   provoke(): void {
+    if (this.goalOnly) return;
     if (this.mode === 'idle' || (this.mode === 'return' && this.distanceFromSpawn < 12)) this.mode = 'chase';
   }
 
