@@ -173,7 +173,7 @@ The world is never sent. The server sends only its seed, and the client runs the
 
 ### Game modes
 
-Modes such as the Ember Run live in `server/src/application/modes/`. Each implements `GameMode`: a `step` each tick, the hero's `status` for their HUD, and optional rule hooks (`skillBlocked`, `mountBlocked`, `ignoredByMonsters`, `frozen`, `onPlayerFell`, `onPlayerRemoved`). A mode changes the world only through `ModeHost` (teleport, rewards, achievements, leaderboards). Combat, monster AI and mounts ask the world for those rules instead of knowing about any mode (ADR 0011). Results go to `Leaderboards`, which keeps the boards in memory and writes them through a `LeaderboardRepository` (a JSON file online, localStorage in single-player).
+Four modes live in `server/src/application/modes/`: `EmberRun`, `LanternNight`, `RiftTrials` and `Duels`. Each implements `GameMode`: a `step` each tick, the hero's `status` for their HUD, and optional rule hooks (`skillBlocked`, `mountBlocked`, `ignoredByMonsters`, `frozen`, `onPlayerFell`, `onPlayerRemoved`). A mode changes the world only through `ModeHost` (teleport, rewards, achievements, leaderboards). Combat, monster AI and mounts ask the world for those rules instead of knowing about any mode (ADR 0011). Two rules reach into the domain without naming a mode: rift monsters carry their party and fight only it (`sameFight`), and a hero can hit another hero only while `CombatWorld.duelOpponent` says they are duelling (ADR 0012). Results go to `Leaderboards`, which keeps the boards in memory and writes them through a `LeaderboardRepository` (a JSON file online, localStorage in single-player).
 
 ## 7. Play modes: online and single-player
 
@@ -252,10 +252,10 @@ The current design targets one process with up to a few hundred players. The por
 | Level | Where | Examples |
 | --- | --- | --- |
 | Unit | `packages/*/test` | Physics collisions, protocol validation, token bucket, spatial hash, snapshot interpolation |
-| Domain / application | `server/test/combat`, `game-world`, `session-service` | Story chains end to end, daily bounties, save migration, monster leashing, speed-hack guard, duplicate login, full server |
+| Domain / application | `server/test/combat`, `game-world`, `session-service` | Story chains end to end, daily bounties, save migration, each mode end to end on a fake clock (a race, a night won and lost, a full rift run, duels), mounts and pets, monster leashing, speed-hack guard, duplicate login, full server |
 | Integration | `server/test/infrastructure` | Atomic JSON saves, config validation |
-| End to end | `server/test/e2e`, `client/test/offline` | Real HTTP and WebSocket server; two clients join, see each other move, and chat; path traversal blocked; single-player through the in-page server |
-| Browser (CI) | `scripts/browser-smoke.mjs` | Headless Chromium with WebGL: two players in the online build see each other move and chat; the preview bundle renders and plays |
+| End to end | `server/test/e2e`, `client/test/offline` | Real HTTP and WebSocket server; two clients join, see each other move, and chat; two clients fight a duel to a rating change; path traversal blocked; single-player through the in-page server |
+| Browser (CI) | `scripts/browser-smoke.mjs` | Headless Chromium with WebGL: two players in the online build see each other move and chat; the preview bundle renders and plays, opens the journal and the stable, and starts and gives up an Ember Run |
 | Container (CI) | `.github/workflows/ci.yml` | Docker image builds, starts, answers `/healthz` and serves the client |
 
 ## 14. Deployment
