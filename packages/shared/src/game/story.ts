@@ -1,5 +1,6 @@
 import { LANDMARK_NAMES, type LandmarkId } from '../world/landmarks';
 import { MONSTERS, type MonsterType } from './monsters';
+import type { MountId } from './mounts';
 import { npcName, type NpcId } from './npcs';
 import type { TitleId } from './titles';
 
@@ -27,6 +28,7 @@ export interface StepReward {
   readonly tonics?: number;
   readonly marks?: number;
   readonly title?: TitleId;
+  readonly mount?: MountId;
 }
 
 export interface StoryStep {
@@ -107,10 +109,10 @@ const MAIN: StoryChain = {
     },
     {
       title: 'The Frost Heart', objective: { kind: 'defeat', monster: 'warden', count: 1 }, accept: true, turnIn: 'maren',
-      where: 'Frostspine summit · the highest peak', recommended: 'Level 12+', reward: { xp: 1600, gold: 200, title: 'hero' },
+      where: 'Frostspine summit · the highest peak', recommended: 'Level 12+', reward: { xp: 1600, gold: 200, title: 'hero', mount: 'elk' },
       offer: 'On the highest peak of Frostspine stands the Warden of the Frost Heart. Defeat it, and the lanterns of the realm will never dim again.',
       remind: 'The Warden waits on the highest peak. Step out of the red ring before its slam lands.',
-      done: 'You did it. Every lantern in Emberhold is singing. Stay as long as you like, Hero of the Realm.',
+      done: 'You did it. Every lantern in Emberhold is singing. The frost elk of the peaks came down to the gate this morning and would not leave. I think it is waiting for you, Hero of the Realm.',
     },
   ],
 };
@@ -188,10 +190,10 @@ const THIEF: StoryChain = {
     },
     {
       title: 'Report to Bryn', objective: { kind: 'talk', npc: 'bryn' }, accept: false, turnIn: 'bryn',
-      where: 'Lanternwood road · Ranger Bryn', reward: { xp: 250, gold: 50, marks: 2, title: 'shrinekeeper' },
+      where: 'Lanternwood road · Ranger Bryn', reward: { xp: 250, gold: 50, marks: 2, title: 'shrinekeeper', mount: 'hog' },
       offer: 'Bryn needs to know.',
       remind: 'Tell Ranger Bryn what Oda said.',
-      done: 'Gloom ash. Then it is not poachers. Keep your eyes open after dark, keeper. You have earned the name Shrinekeeper.',
+      done: 'Gloom ash. Then it is not poachers. Keep your eyes open after dark, keeper. You have earned the name Shrinekeeper, and take Bramble here. She was the calmest hog in the woods, and she has taken a liking to you.',
     },
   ],
 };

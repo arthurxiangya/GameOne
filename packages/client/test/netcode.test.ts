@@ -19,7 +19,7 @@ const intentAt = (i: number): MoveIntent => ({ fwd: 1, strafe: Math.sin(i * 0.2)
 
 const selfFrom = (body: ReturnType<typeof createBody>): SelfState => ({
   x: body.x, y: body.y, z: body.z, vx: body.vx, vy: body.vy, vz: body.vz, g: body.grounded,
-  hp: 90, mhp: 90, mp: 40, mmp: 40, dead: false, cd: { strike: 0, bolt: 0, mend: 0, ring: 0, tonic: 0 },
+  hp: 90, mhp: 90, mp: 40, mmp: 40, dead: false, cd: { strike: 0, bolt: 0, mend: 0, ring: 0, tonic: 0 }, mt: null, call: 0,
 });
 
 describe('LocalPlayer prediction', () => {
@@ -46,6 +46,25 @@ describe('LocalPlayer prediction', () => {
     assert.ok(Math.abs(local.body.x - server.x) < 1e-9);
     assert.ok(Math.abs(local.body.y - server.y) < 1e-9);
     assert.ok(Math.abs(local.body.z - server.z) < 1e-9);
+  });
+
+  it('predicts mounted movement at the mount’s speed, exactly as the server simulates it', () => {
+    const world = flatWorld();
+    const local = new LocalPlayer(world);
+    local.reset({ x: 0, y: 0.5, z: 0 });
+    local.landSpeed = 1.6;
+    const server = createBody(0, 0.5, 0);
+    const sent: InputFrame[] = [];
+    for (let i = 0; i < 30; i++) {
+      sent.push(local.step(intentAt(i)));
+      if (i % 3 === 0) {
+        while (sent.length > 2) stepPlayer(world, server, sent.shift()!, SIM_DT, 1.6);
+        local.reconcile({ ...selfFrom(server), mt: 'strider' }, sent[0]!.seq - 1);
+      }
+    }
+    for (const f of sent) stepPlayer(world, server, f, SIM_DT, 1.6);
+    assert.ok(Math.abs(local.body.x - server.x) < 1e-9 && Math.abs(local.body.z - server.z) < 1e-9);
+    assert.equal(local.corrections, 0);
   });
 
   it('adopts a server correction and smooths it visually instead of jumping', () => {

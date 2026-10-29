@@ -9,7 +9,9 @@ import {
   bountiesForDay,
   dayNumber,
   findNpc,
+  activePetBonus,
   isVisiting,
+  mountSpeed,
   sanitizeIntent,
   stepPlayer,
   type ChainId,
@@ -17,9 +19,11 @@ import {
   type InputFrame,
   type Landmark,
   type MonsterAnim,
+  type MountId,
   type NpcAction,
   type NpcDef,
   type NpcId,
+  type PetId,
   type PlayerProgress,
   type RandomSource,
   type ShopItemId,
@@ -35,6 +39,8 @@ import { fail, ok, type Result } from '../domain/result';
 import { BountyService } from '../domain/services/bounty-service';
 import { CombatService, type CombatWorld } from '../domain/services/combat-service';
 import { MonsterAi, type AiWorld } from '../domain/services/monster-ai';
+import { MountService } from '../domain/services/mount-service';
+import { PetService } from '../domain/services/pet-service';
 import { ProgressTracker } from '../domain/services/progress-tracker';
 import { ProgressionService } from '../domain/services/progression-service';
 import { ShopService } from '../domain/services/shop-service';
@@ -45,6 +51,10 @@ export type PlayerCommand =
   | { readonly kind: 'skill'; readonly skill: SkillId; readonly target: number | null }
   | { readonly kind: 'npc'; readonly npc: NpcId; readonly action: NpcAction; readonly arg: string | null }
   | { readonly kind: 'title'; readonly title: TitleId | null }
+  | { readonly kind: 'mount'; readonly on: boolean }
+  | { readonly kind: 'chooseMount'; readonly mount: MountId | null }
+  | { readonly kind: 'choosePet'; readonly pet: PetId | null }
+  | { readonly kind: 'renamePet'; readonly pet: PetId; readonly name: string }
   | { readonly kind: 'respawn' };
 
 export interface GameWorldOptions {
@@ -101,6 +111,8 @@ export class GameWorld implements CombatWorld, AiWorld {
   private readonly bounties: BountyService;
   private readonly tracker: ProgressTracker;
   private readonly shop: ShopService;
+  private readonly mounts: MountService;
+  private readonly pets: PetService;
   private readonly calendar: Calendar;
   private today: number;
   private nextEntityId = 1;
@@ -122,8 +134,10 @@ export class GameWorld implements CombatWorld, AiWorld {
     const progression = new ProgressionService(this.events);
     this.story = new StoryService(this.events, progression, rng);
     this.bounties = new BountyService(this.events, progression, (day) => bountiesForDay(generated.seed, day, { duels: false }));
-    this.tracker = new ProgressTracker(this.story, this.bounties, this.calendar);
-    this.shop = new ShopService(this.events, progression);
+    this.pets = new PetService(this.events, rng);
+    this.mounts = new MountService(this.events, this.clock);
+    this.tracker = new ProgressTracker(this.story, this.bounties, this.pets, this.calendar);
+    this.shop = new ShopService(this.events, progression, this.pets);
     this.combat = new CombatService(this, rng, this.clock, this.events, progression, this.tracker);
     this.ai = new MonsterAi(this, this.combat, this.events, rng);
 
@@ -245,6 +259,18 @@ export class GameWorld implements CombatWorld, AiWorld {
       case 'title':
         result = this.chooseTitle(player, command.title);
         break;
+      case 'mount':
+        result = command.on ? this.mounts.call(player) : this.mounts.dismiss(player);
+        break;
+      case 'chooseMount':
+        result = this.mounts.choose(player, command.mount);
+        break;
+      case 'choosePet':
+        result = this.pets.choose(player, command.pet);
+        break;
+      case 'renamePet':
+        result = this.pets.rename(player, command.pet, command.name);
+        break;
       case 'respawn':
         result = this.revive(player);
         break;
@@ -297,6 +323,8 @@ export class GameWorld implements CombatWorld, AiWorld {
       player.lastInputSeq = Math.max(player.lastInputSeq, skipped[skipped.length - 1]!.seq);
     }
 
+    this.mounts.update(player, dt);
+    if (player.dead) player.dismount();
     this.regenerate(player, dt);
     if (player.body.y < PHYSICS.killPlaneY) this.rescueFallenPlayer(player);
   }
@@ -310,6 +338,7 @@ export class GameWorld implements CombatWorld, AiWorld {
         ? { fwd: 0, strafe: 0, yaw: intent.yaw, jump: false, swim: false }
         : { ...intent, jump: frame.jump, swim: frame.swim },
       SIM_DT,
+      mountSpeed(player.riding),
     );
     if (result.moveLength > 0.1) player.yaw = Math.atan2(result.moveX, result.moveZ);
   }
@@ -318,7 +347,7 @@ export class GameWorld implements CombatWorld, AiWorld {
     if (player.dead) return;
     const recentlyHurt = this.simTime - player.lastHurtAt < REGEN.healthDelaySeconds;
     const fighting = recentlyHurt || this.simTime - player.lastAttackAt < 3;
-    const manaRate = fighting ? REGEN.manaPerSecondInCombat : REGEN.manaPerSecondOutOfCombat;
+    const manaRate = (fighting ? REGEN.manaPerSecondInCombat : REGEN.manaPerSecondOutOfCombat) * (1 + activePetBonus(player.progress, 'mana'));
     player.mp = Math.min(player.maxMp, player.mp + manaRate * dt);
     if (!recentlyHurt && player.hp < player.maxHp) {
       player.hp = Math.min(player.maxHp, player.hp + player.maxHp * REGEN.healthFractionPerSecond * dt);

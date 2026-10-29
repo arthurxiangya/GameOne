@@ -204,6 +204,16 @@ export class SessionService {
       case 'title':
         world.execute(player.id, { kind: 'title', title: msg.title });
         return;
+      case 'mount':
+        world.execute(player.id, { kind: 'mount', on: msg.on });
+        return;
+      case 'choose':
+        if (msg.kind === 'mount') world.execute(player.id, { kind: 'chooseMount', mount: msg.id });
+        else world.execute(player.id, { kind: 'choosePet', pet: msg.id });
+        return;
+      case 'petName':
+        world.execute(player.id, { kind: 'renamePet', pet: msg.pet, name: msg.name });
+        return;
       case 'respawn':
         world.execute(player.id, { kind: 'respawn' });
         return;

@@ -1,4 +1,6 @@
 import type { MonsterType } from '../game/monsters';
+import type { MountId } from '../game/mounts';
+import type { PetId } from '../game/pets';
 import type { NpcAction, NpcId } from '../game/npcs';
 import type { PlayerProgress } from '../game/progress';
 import type { SkillId } from '../game/skills';
@@ -29,6 +31,12 @@ export type ClientMessage =
   | { readonly t: 'npc'; readonly npc: NpcId; readonly action: NpcAction; readonly arg: string | null }
   /** Choose which earned title shows under your name (null for none). */
   | { readonly t: 'title'; readonly title: TitleId | null }
+  /** Call your mount (`on`), or get off it. */
+  | { readonly t: 'mount'; readonly on: boolean }
+  /** Choose which owned mount R calls, or which pet follows you (null for none). */
+  | { readonly t: 'choose'; readonly kind: 'mount'; readonly id: MountId | null }
+  | { readonly t: 'choose'; readonly kind: 'pet'; readonly id: PetId | null }
+  | { readonly t: 'petName'; readonly pet: PetId; readonly name: string }
   | { readonly t: 'chat'; readonly text: string }
   | { readonly t: 'respawn' }
   | { readonly t: 'ping'; readonly at: number };
@@ -52,6 +60,10 @@ export interface PlayerEntityState {
   readonly dead: boolean;
   /** Title shown under the name. */
   readonly ti: TitleId | null;
+  /** The mount being ridden. */
+  readonly mt: MountId | null;
+  /** The pet following this hero. */
+  readonly pet: PetId | null;
 }
 
 export interface MonsterEntityState {
@@ -103,6 +115,10 @@ export interface SelfState {
   readonly dead: boolean;
   /** Remaining cooldown per skill, in seconds. */
   readonly cd: Readonly<Record<SkillId, number>>;
+  /** The mount being ridden; movement prediction uses its speed. */
+  readonly mt: MountId | null;
+  /** Seconds left calling a mount, or 0. */
+  readonly call: number;
 }
 
 export type LogClass = 'sys' | 'foe' | 'loot' | 'good';
@@ -124,7 +140,9 @@ export type GameEvent =
   | { readonly e: 'toast'; readonly text: string }
   | { readonly e: 'respawned'; readonly fell: boolean }
   /** A story step was completed; `text` is what the character says. */
-  | { readonly e: 'story'; readonly title: string; readonly text: string };
+  | { readonly e: 'story'; readonly title: string; readonly text: string }
+  /** Something worth a big banner: a new mount, a hatched pet. */
+  | { readonly e: 'banner'; readonly title: string; readonly text: string };
 
 export type ServerMessage =
   | {

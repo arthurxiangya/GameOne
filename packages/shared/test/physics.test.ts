@@ -27,6 +27,26 @@ describe('stepPlayer', () => {
     assert.equal(body.grounded, true);
   });
 
+  it('moves faster on a mount, but never swims faster', () => {
+    const walk = createBody(-4, 0.5, 0);
+    const ride = createBody(-4, 0.5, 0);
+    const w = floorWorld();
+    for (let i = 0; i < 12; i++) {
+      stepPlayer(w, walk, eastward, SIM_DT);
+      stepPlayer(w, ride, eastward, SIM_DT, 1.6);
+    }
+    assert.ok(ride.x - -4 > (walk.x - -4) * 1.5, `walked ${walk.x + 4}, rode ${ride.x + 4}`);
+    const water = new VoxelWorld();
+    for (let x = -5; x <= 5; x++) for (let z = -5; z <= 5; z++) for (let y = 1; y <= 3; y++) water.set(x, y, z, Block.Water);
+    const swimA = createBody(0, 1.5, 0);
+    const swimB = createBody(0, 1.5, 0);
+    for (let i = 0; i < 10; i++) {
+      stepPlayer(water, swimA, eastward, SIM_DT);
+      stepPlayer(water, swimB, eastward, SIM_DT, 1.8);
+    }
+    assert.ok(Math.abs(swimA.x - swimB.x) < 1e-9);
+  });
+
   it('is stopped by a wall two blocks high', () => {
     const w = floorWorld((world) => {
       for (let z = -5; z <= 5; z++) for (let y = 1; y <= 2; y++) world.set(3, y, z, Block.Stone);

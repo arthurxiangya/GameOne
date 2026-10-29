@@ -122,16 +122,17 @@ function sweep(world: VoxelWorld, b: PhysicsBody, dt: number): { blockedX: boole
 }
 
 /**
- * Advances a player body by one step. Deterministic for a given world, body and
- * intent, which is what makes client-side prediction and server authority agree.
+ * Advances a player body by one step. Deterministic for a given world, body, intent and
+ * `landSpeed` (a mount's multiplier on walking speed; swimming is never faster), which is what
+ * makes client-side prediction and server authority agree.
  */
-export function stepPlayer(world: VoxelWorld, body: PhysicsBody, intent: MoveIntent, dt: number): StepResult {
+export function stepPlayer(world: VoxelWorld, body: PhysicsBody, intent: MoveIntent, dt: number, landSpeed = 1): StepResult {
   const inWater = isBodyInWater(world, body);
   const sy = Math.sin(intent.yaw);
   const cy = Math.cos(intent.yaw);
   const moveX = -sy * intent.fwd + cy * intent.strafe;
   const moveZ = -cy * intent.fwd - sy * intent.strafe;
-  const speed = inWater ? PHYSICS.swimSpeed : PHYSICS.walkSpeed;
+  const speed = inWater ? PHYSICS.swimSpeed : PHYSICS.walkSpeed * landSpeed;
   const k = 1 - Math.exp(-PHYSICS.acceleration * dt);
   body.vx += (moveX * speed - body.vx) * k;
   body.vz += (moveZ * speed - body.vz) * k;
