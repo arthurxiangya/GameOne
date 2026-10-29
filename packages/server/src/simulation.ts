@@ -1,4 +1,4 @@
-import { Mulberry32, generateWorld, type GeneratedWorld } from '@lanternwood/shared';
+import { Mulberry32, dayNumber, generateWorld, type GeneratedWorld } from '@lanternwood/shared';
 import { GameWorld } from './application/game-world';
 import type { Logger, SystemTime, TokenHasher } from './application/ports';
 import { SessionService } from './application/session-service';
@@ -41,6 +41,7 @@ export function createSimulation({ config, repository, logger, time, hashToken, 
     generated: realm,
     rng: new Mulberry32((config.worldSeed ^ Date.now()) | 0),
     dayLengthSeconds: config.dayLengthSeconds,
+    calendar: { today: () => dayNumber(Date.parse(time.iso())) },
   });
   const sessions = new SessionService({
     world,

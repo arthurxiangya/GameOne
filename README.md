@@ -3,8 +3,10 @@
 A voxel MMORPG for the browser. An authoritative Node.js game server simulates a floating realm at a fixed tick; players connect over WebSocket with a three.js client that predicts their own movement and interpolates everyone else.
 
 - **Shared world, real players.** Everyone online is in the same realm, sees each other move and fight, and can chat.
-- **Five zones and a hub town.** Emberhold (quests and a shop), Sunmeadow, Reedmere, Lanternwood, the Amber Dunes and Frostspine Peaks, with leveled monsters and a final boss.
-- **RPG systems.** Four skills, tonics, critical hits, experience and levels up to 20, gold, weapon upgrades and a six-quest chain.
+- **Five zones and a hub town.** Emberhold, Sunmeadow, Reedmere, Lanternwood, the Amber Dunes and Frostspine Peaks, with leveled monsters and a final boss.
+- **Stories.** Four story chains told by seven characters: the main quest to the Warden of the Frost Heart, plus The Drowned Bell, The Lantern Thief and Glass of the Rift, with objectives to defeat, collect, find and talk. Stories are data (`shared/src/game/story.ts`), run by one engine on the server.
+- **Daily bounties.** Captain Rook posts three new bounties every day at midnight UTC, the same for everyone, paying gold, XP and Ember Marks.
+- **RPG systems.** Four skills, tonics, critical hits, experience and levels up to 20, gold, weapon upgrades, Ember Marks and titles, and a journal (J) that tracks it all.
 - **Persistent heroes.** Progress is saved on the server and restored when you return in the same browser.
 - **Works on phones.** A touch joystick and skill wheel, tap-to-target, and a smaller draw distance on small screens.
 - **Single-player preview.** The same game server can run inside the page, so the game also plays with no server at all.
@@ -99,7 +101,7 @@ The server reads environment variables (see [.env.example](.env.example)). Inval
 ```
 packages/
   shared/   Pure TypeScript used by both sides: world generation, mesher, physics,
-            game rules (stats, skills, monsters, quests, economy) and the wire protocol
+            game rules (stats, skills, monsters, stories, bounties, economy) and the wire protocol
   server/   Authoritative server, layered as domain → application → infrastructure
   client/   three.js renderer, prediction/interpolation netcode, HUD and input
 docs/
@@ -129,7 +131,7 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing code. It expla
 `npm test` runs about 80 tests:
 
 - **Shared:** deterministic world generation, collision physics, protocol validation, game rules and chunk meshing.
-- **Server:** combat, quests, monster AI, the speed-hack guard, session handling (rate limits, duplicate logins, full server), persistence, and a real WebSocket end-to-end test with two players.
+- **Server:** combat, stories and bounties, save migration, monster AI, the speed-hack guard, session handling (rate limits, duplicate logins, full server), persistence, and a real WebSocket end-to-end test with two players.
 - **Client:** prediction and reconciliation converge with the server, snapshot interpolation, clock sync, and single-player play through the in-page server.
 
 CI also runs real-browser checks in headless Chromium with WebGL: two players join the online build, see each other move and chat, and the single-player preview loads, renders and plays. It then builds the Docker image and checks that the container serves the game.

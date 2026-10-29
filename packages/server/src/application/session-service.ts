@@ -1,6 +1,7 @@
 import {
   MAX_CLIENT_MESSAGE_BYTES,
   PROTOCOL_VERSION,
+  cloneProgress,
   decodeJson,
   encodeMessage,
   lookForAccount,
@@ -142,7 +143,7 @@ export class SessionService {
       if (!player) continue;
       if (player.progressDirty) {
         player.progressDirty = false;
-        this.send(session, { t: 'progress', p: { ...player.progress } });
+        this.send(session, { t: 'progress', p: cloneProgress(player.progress) });
       }
       if (!sendSnapshots) continue;
       // A client that cannot keep up skips snapshots; its events wait for the next one.
@@ -198,7 +199,10 @@ export class SessionService {
         world.execute(player.id, { kind: 'skill', skill: msg.skill, target: msg.target });
         return;
       case 'npc':
-        world.execute(player.id, { kind: 'npc', npc: msg.npc, action: msg.action });
+        world.execute(player.id, { kind: 'npc', npc: msg.npc, action: msg.action, arg: msg.arg });
+        return;
+      case 'title':
+        world.execute(player.id, { kind: 'title', title: msg.title });
         return;
       case 'respawn':
         world.execute(player.id, { kind: 'respawn' });
@@ -259,7 +263,7 @@ export class SessionService {
       seed: world.seed,
       tickRate: options.tickRate,
       look: player.look,
-      progress: { ...player.progress },
+      progress: cloneProgress(player.progress),
       day: world.timeOfDay,
       dayLength: options.dayLengthSeconds,
     });

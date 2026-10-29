@@ -42,7 +42,7 @@ flowchart TD
 
 | Package | Depends on | Runs in | Contains |
 | --- | --- | --- | --- |
-| `shared` | nothing | Node and browser | Seeded noise and RNG, voxel world and generator, chunk mesher, player physics, stats/skills/monsters/quests/economy data, protocol types, validation and sanitisers |
+| `shared` | nothing | Node and browser | Seeded noise and RNG, voxel world and generator, chunk mesher, player physics, stats, skills, monsters, story scripts, bounties and economy data, protocol types, validation and sanitisers |
 | `server` | `shared`, `ws` | Node | The authoritative game server |
 | `client` | `shared`, `three`, `server/embedded` | Browser | Rendering, input, prediction, interpolation, HUD, transports |
 
@@ -73,7 +73,7 @@ flowchart TB
   end
   subgraph Domain
     ENT[Player, Monster]
-    SVC[Combat, MonsterAi, Quests, Shop, Progression]
+    SVC[Combat, MonsterAi, Story, Bounties, Shop, Progression]
     PORTS[(Ports: Clock, PlayerRepository, EventSink)]
   end
   WS --> SES
@@ -248,7 +248,7 @@ The current design targets one process with up to a few hundred players. The por
 | Level | Where | Examples |
 | --- | --- | --- |
 | Unit | `packages/*/test` | Physics collisions, protocol validation, token bucket, spatial hash, snapshot interpolation |
-| Domain / application | `server/test/combat`, `game-world`, `session-service` | Quest chain end to end, monster leashing, speed-hack guard, duplicate login, full server |
+| Domain / application | `server/test/combat`, `game-world`, `session-service` | Story chains end to end, daily bounties, save migration, monster leashing, speed-hack guard, duplicate login, full server |
 | Integration | `server/test/infrastructure` | Atomic JSON saves, config validation |
 | End to end | `server/test/e2e`, `client/test/offline` | Real HTTP and WebSocket server; two clients join, see each other move, and chat; path traversal blocked; single-player through the in-page server |
 | Browser (CI) | `scripts/browser-smoke.mjs` | Headless Chromium with WebGL: two players in the online build see each other move and chat; the preview bundle renders and plays |

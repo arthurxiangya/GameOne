@@ -173,6 +173,13 @@ async function preview(browser, dir) {
       annotate('warning', `walk trace (blocks/pending/fps every 100 ms): ${trace.join(' ')}; corrections ${moved.corrections}, snaps ${moved.snaps}, longest frame ${moved.longestFrameMs} ms, in-page server ${JSON.stringify(server)}`);
     }
     check(moved.pending < 20, `the in-page server acknowledges input (${moved.pending} unacknowledged frames)`);
+    await solo.page.keyboard.press('j');
+    const journal = await solo.page
+      .waitForFunction(() => !document.getElementById('journal')?.hidden && document.querySelectorAll('#jBody .j-row').length >= 4, null, { timeout: 5000 })
+      .then(() => true, () => false);
+    check(journal, 'the journal opens with every story listed');
+    check((await solo.page.textContent('#qObj'))?.includes('Elder Maren') ?? false, 'the tracker points a new hero at Elder Maren');
+    await solo.page.keyboard.press('Escape');
     checkRendering('preview', moved);
     check(start.hp > 0, `hero has health (${start.hp})`);
   } finally {

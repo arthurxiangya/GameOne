@@ -1,14 +1,14 @@
 import {
   MONSTERS,
-  NPCS,
   NPC_INTERACT_RANGE,
   PROTOCOL_VERSION,
   SIM_DT,
   SKILLS,
   SKILL_IDS,
+  TITLES,
   generateWorld,
-  questAt,
   zoneForBiome,
+  type ChainId,
   type EntityState,
   type GameEvent,
   type GeneratedWorld,
@@ -41,12 +41,15 @@ import { ChatPanel } from '../ui/chat';
 import { DialogView } from '../ui/dialog';
 import { byId } from '../ui/dom';
 import { Hud } from '../ui/hud';
+import { JournalView } from '../ui/journal';
 import { Minimap, type MapMarker } from '../ui/minimap';
 import { Notices } from '../ui/notices';
 import { Overlay } from '../ui/overlay';
 import { bindSkillBar } from '../ui/skill-bar';
 import { TitleScreen } from '../ui/title-screen';
+import { npcMark, npcTopics, type TopicAction } from './conversations';
 import { loadIdentity, rememberName, type Identity } from './identity';
+import { defaultTracked, objectiveSpot, stillTrackable, trackerInfo } from './objectives';
 
 export interface GameClientOptions {
   readonly createTransport: TransportFactory;
@@ -85,6 +88,7 @@ export class GameClient {
   private readonly notices = new Notices();
   private readonly chat = new ChatPanel();
   private readonly dialog = new DialogView();
+  private readonly journal: JournalView;
   private readonly title: TitleScreen;
   private readonly keyboard = new KeyboardInput();
   private readonly joystick: Joystick;
@@ -123,6 +127,8 @@ export class GameClient {
   private pingTimer = 0;
   private questMark: { x: number; z: number } | null = null;
   private questTimer = 0;
+  /** The story shown in the tracker and on the map; chosen in the journal or followed automatically. */
+  private tracked: ChainId | null = null;
   private nearNpc: NpcDef | null = null;
   private frameCount = 0;
   private lastFrame = performance.now();
@@ -155,6 +161,10 @@ export class GameClient {
     this.overlay = new Overlay(byId('overlay'), (x, y, z) => this.ctx.toScreen(x, y, z));
     this.minimap = new Minimap(byId<HTMLCanvasElement>('minimap'));
     this.title = new TitleScreen(this.identity.name);
+    this.journal = new JournalView({
+      track: (id) => this.track(id),
+      title: (id) => this.connection.send({ t: 'title', title: id }),
+    });
     this.joystick = new Joystick(byId('stick'), byId('knob'));
     document.body.classList.toggle('offline', options.offline);
     this.connection = options.createTransport({
@@ -206,6 +216,7 @@ export class GameClient {
         case '4': this.useSkill('ring'); break;
         case 'q': this.useSkill('tonic'); break;
         case 'e': if (this.nearNpc) this.openNpc(this.nearNpc); break;
+        case 'j': this.toggleJournal(); break;
         case 'tab': this.cycleTarget(); break;
         case 'enter': if (!this.options.offline) { this.keyboard.clear(); this.chat.open(); } break;
         case 'escape': this.escape(); break;
@@ -223,6 +234,8 @@ export class GameClient {
     byId('talkBtn').addEventListener('click', () => {
       if (this.nearNpc) this.openNpc(this.nearNpc);
     });
+    byId('journalBtn').addEventListener('click', () => this.toggleJournal());
+    byId('questBox').addEventListener('click', () => this.toggleJournal());
     window.addEventListener('resize', () => this.minimap.resize());
   }
 
@@ -231,7 +244,7 @@ export class GameClient {
     if (this.generated?.seed === seed) return;
     this.generated = generateWorld(seed);
     this.terrain.load(this.generated);
-    this.views.spawnNpcs(this.generated.world);
+    this.views.spawnNpcs(this.generated.world, this.generated.npcs);
     this.minimap.paint(this.generated.world);
     if (this.local) this.local.setWorld(this.generated.world);
     else this.local = new LocalPlayer(this.generated.world);
@@ -280,6 +293,7 @@ export class GameClient {
     this.views.remove(this.selfId);
     this.overlay.clear();
     this.dialog.close();
+    this.journal.close();
     this.chat.close();
     this.setTarget(null);
     for (const id of ['menu', 'death']) byId(id).hidden = true;
@@ -287,6 +301,7 @@ export class GameClient {
     this.clock.reset();
     this.self = null;
     this.progress = null;
+    this.tracked = null;
     this.haveSnapshot = false;
     this.title.setBusy(false);
   }
@@ -325,7 +340,8 @@ export class GameClient {
     this.chat.clear();
     this.chat.system(`Welcome to Lanternwood Realms, ${msg.progress.name}.`);
     this.onProgress(msg.progress);
-    if (msg.progress.quest === 0 && msg.progress.questState === 'available') {
+    const main = msg.progress.story.main;
+    if (main.step === 0 && main.state === 'available') {
       window.setTimeout(() => this.notices.toast('Elder Maren by the fountain has a quest for you. Look for the gold !', 4), 1600);
     }
   }
@@ -359,10 +375,40 @@ export class GameClient {
   }
 
   private onProgress(p: PlayerProgress): void {
+    const before = this.progress;
     this.progress = p;
     this.hud.setProgress(p);
+    // Follow whichever story just moved, unless the tracked one is still going.
+    if (before) {
+      for (const id of Object.keys(p.story) as ChainId[]) {
+        const a = before.story[id];
+        const b = p.story[id];
+        if (a.step !== b.step || a.state !== b.state || a.progress !== b.progress) {
+          if (stillTrackable(p, id)) this.tracked = id;
+        }
+      }
+    }
+    if (this.tracked === null || !stillTrackable(p, this.tracked)) this.tracked = defaultTracked(p);
+    this.hud.setTracker(trackerInfo(p, this.tracked));
+    this.questTimer = 0;
     const npc = this.dialog.npc;
-    if (npc?.role === 'shop' && this.dialog.isOpen) this.openNpc(npc);
+    if (npc && this.dialog.isOpen) this.dialog.show(npc, npcTopics(npc, p, Date.now()), (a) => this.chooseTopic(npc, a), true);
+    this.journal.refresh(p, this.tracked, Date.now());
+  }
+
+  private track(id: ChainId): void {
+    this.tracked = id;
+    if (this.progress) this.hud.setTracker(trackerInfo(this.progress, id));
+    this.questTimer = 0;
+  }
+
+  private toggleJournal(): void {
+    if (this.phase !== 'playing' || !this.progress) return;
+    if (this.journal.isOpen) this.journal.close();
+    else {
+      this.dialog.close();
+      this.journal.open(this.progress, this.tracked, Date.now());
+    }
   }
 
   private onEvent(ev: GameEvent): void {
@@ -425,6 +471,10 @@ export class GameClient {
       case 'respawned':
         if (ev.fell) this.notices.toast('You fell off the edge of the realm. Back to Emberhold!', 2.8);
         break;
+      case 'story':
+        this.notices.banner(ev.title, 'Complete');
+        this.chat.system(`“${ev.text}”`, 'good');
+        break;
       case 'die':
         if (this.targetId === ev.id) window.setTimeout(() => this.targetId === ev.id && this.setTarget(null), 500);
         break;
@@ -480,7 +530,7 @@ export class GameClient {
         best = { kind: 'entity', id: e.id };
       }
     }
-    NPCS.forEach((npc, i) => {
+    this.npcs.forEach((npc, i) => {
       const head = this.views.npcHead(i);
       const screen = head ? this.ctx.toScreen(head.x, head.y - 1, head.z) : null;
       const d = screen ? Math.hypot(screen[0] - sx, screen[1] - sy) : Infinity;
@@ -496,15 +546,26 @@ export class GameClient {
     else this.notices.toast(`Walk closer to talk to ${picked.npc.name}`, 1.8);
   }
 
+  private get npcs(): readonly NpcDef[] {
+    return this.generated?.npcs ?? [];
+  }
+
   private openNpc(npc: NpcDef): void {
     if (!this.progress || this.self?.dead) return;
-    this.dialog.showFor(npc, this.progress, (action) => this.connection.send({ t: 'npc', npc: npc.id, action }));
+    this.journal.close();
+    this.connection.send({ t: 'npc', npc: npc.id, action: 'greet', arg: null });
+    this.dialog.show(npc, npcTopics(npc, this.progress, Date.now()), (a) => this.chooseTopic(npc, a));
+  }
+
+  private chooseTopic(npc: NpcDef, action: TopicAction): void {
+    if (action.send) this.connection.send({ t: 'npc', npc: npc.id, action: action.send.action, arg: action.send.arg });
   }
 
   private escape(): void {
     const menu = byId('menu');
     if (!menu.hidden) menu.hidden = true;
     else if (this.dialog.isOpen) this.dialog.close();
+    else if (this.journal.isOpen) this.journal.close();
     else this.setTarget(null);
   }
 
@@ -630,6 +691,7 @@ export class GameClient {
     const visible = !dead && (distance < 26 || targeted || (boss && distance < 45));
     const head = this.views.headOf(e.id);
     if (!head) return;
+    if (s.k === 'p') this.overlay.setSub(`e${e.id}`, s.ti ? TITLES[s.ti].name : '');
     this.overlay.place(`e${e.id}`, head.x, head.y + 0.25, head.z, {
       visible,
       health: s.hp < s.mhp || targeted ? s.hp / s.mhp : null,
@@ -647,7 +709,7 @@ export class GameClient {
   private updateNpcs(): void {
     let nearest: NpcDef | null = null;
     let nearestDistance = NPC_INTERACT_RANGE - 0.5;
-    NPCS.forEach((npc, i) => {
+    this.npcs.forEach((npc, i) => {
       const d = Math.hypot(npc.x - this.renderPos.x, npc.z - this.renderPos.z);
       if (d < nearestDistance && !this.self?.dead) {
         nearestDistance = d;
@@ -655,13 +717,14 @@ export class GameClient {
       }
       const head = this.views.npcHead(i);
       this.overlay.ensurePlate(`npc-${npc.id}`, 'npc', npc.name);
-      if (head) this.overlay.place(`npc-${npc.id}`, head.x, head.y, head.z, { visible: d < 40, health: null, mark: this.npcMark(npc) });
+      const mark = this.progress ? npcMark(npc, this.progress) : '';
+      if (head) this.overlay.place(`npc-${npc.id}`, head.x, head.y, head.z, { visible: d < 40 || (mark !== '' && d < 70), health: null, mark });
     });
     const found = nearest as NpcDef | null;
     this.nearNpc = found;
     const talk = byId('talkBtn');
     if (found && !this.dialog.isOpen) {
-      const label = found.role === 'quests' ? `Talk to ${found.name}` : 'Visit Oda’s forge';
+      const label = `Talk to ${found.name}`;
       if (talk.hidden || talk.textContent !== label) {
         talk.textContent = label;
         talk.hidden = false;
@@ -669,12 +732,6 @@ export class GameClient {
     } else if (!talk.hidden) talk.hidden = true;
     const open = this.dialog.npc;
     if (open && Math.hypot(open.x - this.renderPos.x, open.z - this.renderPos.z) > 6) this.dialog.close();
-  }
-
-  private npcMark(npc: NpcDef): string {
-    const p = this.progress;
-    if (npc.role !== 'quests' || !p || !questAt(p.quest)) return '';
-    return p.questState === 'available' ? '!' : p.questState === 'ready' ? '?' : '';
   }
 
   private updateZone(dt: number, world: GeneratedWorld['world']): void {
@@ -699,30 +756,12 @@ export class GameClient {
 
   private computeQuestMark(): { x: number; z: number } | null {
     const p = this.progress;
-    const quest = p ? questAt(p.quest) : undefined;
-    if (!p || !quest || p.questState === 'done') return null;
-    if (p.questState !== 'active') {
-      const maren = NPCS.find((n) => n.role === 'quests');
-      return maren ? { x: maren.x, z: maren.z } : null;
-    }
-    const candidates: { x: number; z: number }[] = [];
+    if (!p || !this.generated) return null;
+    const live: { type: string; x: number; z: number }[] = [];
     for (const e of this.entities.all()) {
-      if (e.state.k === 'm' && e.state.ty === quest.target && e.state.st !== 'dead') candidates.push({ x: e.pose.x, z: e.pose.z });
+      if (e.state.k === 'm' && e.state.st !== 'dead') live.push({ type: e.state.ty, x: e.pose.x, z: e.pose.z });
     }
-    // Nothing in view: the world is deterministic, so the client knows every spawn point.
-    if (candidates.length === 0) {
-      for (const s of this.generated?.monsterSpawns ?? []) if (s.type === quest.target) candidates.push({ x: s.x, z: s.z });
-    }
-    let best: { x: number; z: number } | null = null;
-    let bestDistance = Infinity;
-    for (const c of candidates) {
-      const d = Math.hypot(c.x - this.renderPos.x, c.z - this.renderPos.z);
-      if (d < bestDistance) {
-        bestDistance = d;
-        best = c;
-      }
-    }
-    return best;
+    return objectiveSpot(p, this.tracked, this.generated, live, this.renderPos);
   }
 
   private mapMarkers(): MapMarker[] {
@@ -733,7 +772,7 @@ export class GameClient {
         if (s.st !== 'dead') markers.push({ x: e.pose.x, z: e.pose.z, kind: MONSTERS[s.ty].boss ? 'boss' : 'foe' });
       } else markers.push({ x: e.pose.x, z: e.pose.z, kind: 'ally' });
     }
-    for (const npc of NPCS) markers.push({ x: npc.x, z: npc.z, kind: 'npc' });
+    for (const npc of this.npcs) markers.push({ x: npc.x, z: npc.z, kind: 'npc' });
     return markers;
   }
 

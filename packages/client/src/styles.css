@@ -157,7 +157,9 @@ input[type='text']:focus-visible { outline: 2px solid var(--lantern); outline-of
 .clock svg { width: 12px; height: 12px; }
 .clock .sunic { fill: var(--lantern); } .clock .moonic { fill: var(--moon); }
 .clock span { color: var(--ink-dim); }
-.quest { width: 100%; padding: 8px 10px; display: grid; gap: 2px; }
+.quest { width: 100%; padding: 8px 10px; display: grid; gap: 2px; pointer-events: auto; cursor: pointer; text-align: left; color: var(--ink); font: inherit; appearance: none; }
+.quest:hover { background: var(--glass-strong); }
+.quest:focus-visible { outline: 2px solid var(--lantern); outline-offset: 2px; }
 .quest .q-k { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--lantern); }
 .quest .q-t { font-size: 12px; font-weight: 600; line-height: 1.3; }
 .quest .q-o { font-size: 11px; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1.35; }
@@ -208,6 +210,7 @@ body.touch .log { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); width:
 .np { position: absolute; left: 0; top: 0; display: none; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; will-change: transform; }
 .np .nm { font-size: 10.5px; font-weight: 600; color: var(--ink); text-shadow: 0 1px 3px var(--shade), 0 0 2px var(--shade); }
 .np .lv { color: var(--ink-dim); font-weight: 500; }
+.np .sub { font-size: 9.5px; color: var(--friend); text-shadow: 0 1px 3px var(--shade); margin-top: -2px; }
 .np.foe .nm { color: var(--foe); } .np.npc .nm { color: var(--friend); } .np.ally .nm { color: var(--ally); }
 .np.boss .nm { font-size: 12.5px; }
 .np .mark { font: 400 22px/1 var(--font-display); color: var(--lantern); text-shadow: 0 2px 6px var(--shade); }
@@ -240,6 +243,32 @@ body.touch .log { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); width:
 .dlg-body { display: grid; gap: 8px; }
 .modal .acts { display: grid; gap: 8px; margin-top: 4px; }
 .modal ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.6; color: var(--ink); }
+
+/* journal */
+.journal { width: min(440px, calc(100vw - 24px)); max-height: min(82vh, 640px); }
+.j-head { display: flex; align-items: center; gap: 8px; }
+.j-head .x { margin-left: auto; }
+.j-body { display: grid; gap: 14px; }
+.j-sec { display: grid; gap: 6px; }
+.j-sec h3 { margin: 0; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--lantern); font-weight: 600; }
+.j-row {
+  appearance: none; display: grid; grid-template-columns: 1fr auto; gap: 1px 10px; align-items: baseline; text-align: left; width: 100%;
+  padding: 8px 10px; border-radius: 10px; border: 1px solid var(--glass-edge); background: var(--shade); color: var(--ink); font: inherit; cursor: pointer;
+}
+.j-row:hover:not([disabled]) { background: var(--hover); }
+.j-row:focus-visible { outline: 2px solid var(--lantern); outline-offset: 1px; }
+.j-row.static { cursor: default; }
+.j-row.on { border-color: var(--lantern); }
+.j-row.quiet { opacity: 0.6; }
+.j-row[disabled] { cursor: default; }
+.j-row b { font-size: 12.5px; font-weight: 600; }
+.j-row span { grid-column: 1; font-size: 11.5px; line-height: 1.4; color: var(--ink-dim); }
+.j-row em { grid-column: 2; grid-row: 1 / span 2; font-style: normal; font-size: 10.5px; color: var(--lantern); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { appearance: none; font: 500 12px var(--font-mono); color: var(--ink); background: var(--shade); border: 1px solid var(--glass-edge); border-radius: 999px; padding: 7px 12px; min-height: 32px; cursor: pointer; }
+.chip:hover { background: var(--hover); }
+.chip.on { background: var(--lantern); color: var(--night); border-color: var(--lantern-hi); }
+.chip:focus-visible { outline: 2px solid var(--lantern); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   .logo text, .logo.go text { animation: none; fill-opacity: 1; stroke-opacity: 0; stroke-dashoffset: 0; }

@@ -1,6 +1,7 @@
 import { applyEntityUpdates, generateWorld, newProgress, type EntityState, type GeneratedWorld, type MonsterType, type RandomSource, type ServerMessage } from '@lanternwood/shared';
 import { GameWorld } from '../src/application/game-world';
 import type { ClientLink, SystemTime } from '../src/application/ports';
+import type { Calendar } from '../src/domain/ports';
 import type { Monster } from '../src/domain/entities/monster';
 import type { Player } from '../src/domain/entities/player';
 
@@ -10,8 +11,21 @@ export const sharedRealm = (): GeneratedWorld => (realm ??= generateWorld(2026))
 
 export const constantRandom = (value = 0.5): RandomSource => ({ next: () => value });
 
-export const makeWorld = (rng: RandomSource = constantRandom()): GameWorld =>
-  new GameWorld({ generated: sharedRealm(), rng, dayLengthSeconds: 480 });
+/** A calendar tests can turn the page on. */
+export class FakeCalendar implements Calendar {
+  constructor(public day = 20_000) {}
+  today(): number {
+    return this.day;
+  }
+}
+
+export const makeWorld = (rng: RandomSource = constantRandom(), calendar: Calendar = new FakeCalendar()): GameWorld =>
+  new GameWorld({ generated: sharedRealm(), rng, dayLengthSeconds: 480, calendar });
+
+/** Stands a hero next to a character, ready to talk. */
+export function standAt(player: Player, at: { readonly x: number; readonly z: number }, offset = 1.2): void {
+  Object.assign(player.body, { x: at.x, z: at.z + offset, vx: 0, vy: 0, vz: 0 });
+}
 
 export const runTicks = (world: GameWorld, ticks: number, dt = 0.05): void => {
   for (let i = 0; i < ticks; i++) world.step(dt);

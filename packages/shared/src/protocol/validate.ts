@@ -1,5 +1,8 @@
-import { isNpcAction, npcById, type NpcId } from '../game/npcs';
+import { isShopItemId } from '../game/economy';
+import { isNpcAction, isNpcId } from '../game/npcs';
 import { isSkillId } from '../game/skills';
+import { isChainId } from '../game/story';
+import { isTitleId, type TitleId } from '../game/titles';
 import { MAX_INPUT_FRAMES, TOKEN_PATTERN } from './limits';
 import type { ClientMessage, InputFrame } from './messages';
 import { sanitizeChat, sanitizeName } from './sanitize';
@@ -54,9 +57,18 @@ export function parseClientMessage(data: unknown): ParseResult {
       return okMsg({ t: 'skill', skill: data.skill, target: data.target as number | null });
     }
     case 'npc': {
-      if (typeof data.npc !== 'string' || !npcById(data.npc)) return fail('Unknown NPC');
+      if (!isNpcId(data.npc)) return fail('Unknown NPC');
       if (!isNpcAction(data.action)) return fail('Unknown action');
-      return okMsg({ t: 'npc', npc: data.npc as NpcId, action: data.action });
+      const arg = data.arg ?? null;
+      const story = data.action === 'accept' || data.action === 'turnIn' || data.action === 'talk';
+      if (story && !isChainId(arg)) return fail('Unknown story');
+      if (data.action === 'buy' && !isShopItemId(arg)) return fail('Unknown item');
+      if (!story && data.action !== 'buy' && arg !== null) return fail('Unexpected argument');
+      return okMsg({ t: 'npc', npc: data.npc, action: data.action, arg: arg as string | null });
+    }
+    case 'title': {
+      if (data.title !== null && !isTitleId(data.title)) return fail('Unknown title');
+      return okMsg({ t: 'title', title: data.title as TitleId | null });
     }
     case 'chat': {
       if (typeof data.text !== 'string' || data.text.length > 1000) return fail('Invalid chat message');

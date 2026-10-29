@@ -2,18 +2,18 @@ import {
   MAX_LEVEL,
   MONSTERS,
   SKILLS,
-  questAt,
   xpToNext,
   type EntityState,
   type PlayerProgress,
   type SelfState,
   type SkillId,
 } from '@lanternwood/shared';
+import type { TrackerInfo } from '../app/objectives';
 import { byId, setText, svgById } from './dom';
 
 const SKILL_KEYS: readonly SkillId[] = ['strike', 'bolt', 'mend', 'ring', 'tonic'];
 
-/** Player frame, target frame, skill cooldowns, quest tracker and clock. Writes the DOM only on change. */
+/** Player frame, target frame, skill cooldowns, story tracker and clock. Writes the DOM only on change. */
 export class Hud {
   private readonly name = byId('pName');
   private readonly level = byId('pLv');
@@ -64,7 +64,6 @@ export class Hud {
     this.xpFill.style.transform = `scaleX(${p.level >= MAX_LEVEL ? 1 : Math.min(1, p.xp / need).toFixed(3)})`;
     setText(this.xpText, p.level >= MAX_LEVEL ? 'Max level' : `${p.xp} / ${need} XP`);
     for (const [id, button] of this.skillButtons) button.classList.toggle('locked', p.level < SKILLS[id].unlockLevel);
-    this.setQuest(p);
   }
 
   setVitals(self: SelfState): void {
@@ -126,35 +125,10 @@ export class Hud {
     this.hurt.style.opacity = amount.toFixed(2);
   }
 
-  private setQuest(p: PlayerProgress): void {
-    const quest = questAt(p.quest);
-    let kind = 'Quest';
-    let title: string;
-    let objective: string;
-    let where: string;
-    if (!quest || p.questState === 'done') {
-      kind = 'Realm';
-      title = 'Hero of the Realm';
-      objective = 'Every quest is complete';
-      where = 'Explore and hunt freely';
-    } else if (p.questState === 'available') {
-      kind = 'New quest';
-      title = 'Elder Maren has work';
-      objective = 'Talk to her by the fountain';
-      where = 'Emberhold · the gold ! on your map';
-    } else if (p.questState === 'active') {
-      title = quest.title;
-      objective = `${quest.label} ${p.questProgress} / ${quest.need}`;
-      where = quest.where;
-    } else {
-      kind = 'Turn in';
-      title = quest.title;
-      objective = 'Return to Elder Maren';
-      where = 'Emberhold · the gold ? on your map';
-    }
-    setText(this.questKind, kind);
-    setText(this.questTitle, title);
-    setText(this.questObjective, objective);
-    setText(this.questWhere, where);
+  setTracker(info: TrackerInfo): void {
+    setText(this.questKind, info.kind);
+    setText(this.questTitle, info.title);
+    setText(this.questObjective, info.objective);
+    setText(this.questWhere, info.where);
   }
 }

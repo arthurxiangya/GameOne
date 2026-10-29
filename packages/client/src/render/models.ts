@@ -55,6 +55,10 @@ interface HeroOptions {
   readonly hammer?: boolean;
   readonly robe?: boolean;
   readonly beard?: number;
+  /** A long fishing rod over the shoulder. */
+  readonly rod?: boolean;
+  /** A wide-brimmed hat in this colour. */
+  readonly hat?: number;
 }
 
 /** Hooded lantern-keeper figure used for players and townsfolk. */
@@ -86,6 +90,11 @@ export function buildHero(look: Look, options: HeroOptions = {}): ModelRig {
     part(armR, 0.08, 1.7, 0.08, 0x6f4b2d, 0, -0.2, 0.12);
     part(armR, 0.18, 0.18, 0.18, 0x9ff7ff, 0, 0.7, 0.12, true);
   }
+  if (options.rod) {
+    const rod = part(armR, 0.05, 2.1, 0.05, 0x8a6a3c, 0, 0.35, -0.1);
+    rod.rotation.x = -0.5;
+  }
+  if (options.hat !== undefined) part(body, 0.74, 0.06, 0.74, options.hat, 0, 1.56, 0);
   if (options.hammer) {
     part(armR, 0.07, 0.6, 0.07, 0x6f4b2d, 0, -0.45, 0.12);
     part(armR, 0.32, 0.2, 0.2, 0x8f939c, 0, -0.75, 0.12);
@@ -96,6 +105,11 @@ export function buildHero(look: Look, options: HeroOptions = {}): ModelRig {
 const NPC_LOOKS: Readonly<Record<NpcId, { look: Look; options: HeroOptions }>> = {
   maren: { look: { cloak: 0x6a4c8c, hood: 0xe2cf8c, skin: 0xe9c9a6, boots: 0x3b2e2a }, options: { robe: true, staff: true, beard: 0xe8e2d6 } },
   oda: { look: { cloak: 0x8a4a2c, hood: 0x5b6270, skin: 0xd9a77f, boots: 0x2e2622 }, options: { hammer: true } },
+  rook: { look: { cloak: 0x46546e, hood: 0x9aa3b2, skin: 0xc99a72, boots: 0x22262e }, options: { blade: true } },
+  ilka: { look: { cloak: 0x4b2f6e, hood: 0xb28be0, skin: 0xf0d2b0, boots: 0x2a2236 }, options: { robe: true, staff: true } },
+  tamsin: { look: { cloak: 0x2f6f7a, hood: 0xd9c38a, skin: 0xe6be98, boots: 0x3b2e2a }, options: { rod: true, hat: 0xd9c38a } },
+  bryn: { look: { cloak: 0x3d5a2c, hood: 0x2b3f22, skin: 0xd9a77f, boots: 0x3b2e2a }, options: { blade: true, lamp: true } },
+  sefa: { look: { cloak: 0xc98a3c, hood: 0xe8d2a0, skin: 0x9c6b4a, boots: 0x5a3a22 }, options: { robe: true, hat: 0xe8d2a0 } },
 };
 
 export const buildNpc = (id: NpcId): ModelRig => buildHero(NPC_LOOKS[id].look, NPC_LOOKS[id].options);

@@ -37,6 +37,22 @@ describe('parseClientMessage', () => {
     assert.equal(parseClientMessage({ t: 'npc', npc: 'nobody', action: 'buyTonic' }).ok, false);
   });
 
+  it('requires a known story for story actions and a known item for trades', () => {
+    assert.ok(parseClientMessage({ t: 'npc', npc: 'tamsin', action: 'accept', arg: 'bell' }).ok);
+    assert.equal(parseClientMessage({ t: 'npc', npc: 'tamsin', action: 'accept', arg: 'nope' }).ok, false);
+    assert.equal(parseClientMessage({ t: 'npc', npc: 'tamsin', action: 'talk' }).ok, false);
+    assert.ok(parseClientMessage({ t: 'npc', npc: 'oda', action: 'buy', arg: 'tonicSatchel' }).ok);
+    assert.equal(parseClientMessage({ t: 'npc', npc: 'oda', action: 'buy', arg: 'castle' }).ok, false);
+    assert.equal(parseClientMessage({ t: 'npc', npc: 'oda', action: 'sharpen', arg: 'bell' }).ok, false);
+    assert.deepEqual(parseClientMessage({ t: 'npc', npc: 'rook', action: 'greet' }), { ok: true, msg: { t: 'npc', npc: 'rook', action: 'greet', arg: null } });
+  });
+
+  it('accepts only earned-title ids or null', () => {
+    assert.ok(parseClientMessage({ t: 'title', title: 'bellfinder' }).ok);
+    assert.ok(parseClientMessage({ t: 'title', title: null }).ok);
+    assert.equal(parseClientMessage({ t: 'title', title: 'king' }).ok, false);
+  });
+
   it('rejects unknown types and non-objects', () => {
     assert.equal(parseClientMessage({ t: 'teleport' }).ok, false);
     assert.equal(parseClientMessage(null).ok, false);

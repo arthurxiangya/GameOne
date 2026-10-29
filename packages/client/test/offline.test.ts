@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { PROTOCOL_VERSION, isFullEntity, type ServerMessage } from '@lanternwood/shared';
+import { PROTOCOL_VERSION, isFullEntity, newProgress, type ServerMessage } from '@lanternwood/shared';
 import { InMemoryPlayerRepository, createEmbeddedServer, localTokenHasher, type SystemTime } from '@lanternwood/server/embedded';
 import { resolvePlayMode } from '../src/app/play-mode';
 import { LoopbackTransport } from '../src/net/loopback-transport';
@@ -102,12 +102,14 @@ describe('single-player mode', () => {
     const storage: KeyValueStorage = { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) };
     const id = localTokenHasher(token);
     const repo = new LocalStoragePlayerRepository(storage);
-    const record = {
-      accountId: id, name: 'Solo', level: 4, xp: 10, gold: 50, tonics: 2, weapon: 1, quest: 1, questProgress: 2,
-      questState: 'active' as const, falls: 0, createdAt: 'a', updatedAt: 'b',
-    };
+    const record = { ...newProgress('Solo'), accountId: id, level: 4, xp: 10, gold: 50, marks: 3, createdAt: 'a', updatedAt: 'b' };
+    record.story.bell = { step: 2, progress: 1, state: 'active' };
     await repo.save(record);
     assert.deepEqual(await new LocalStoragePlayerRepository(storage).load(id), record);
+
+    // A hero saved by an older build of the preview is migrated, not lost.
+    data.set([...data.keys()][0]!, JSON.stringify({ accountId: id, name: 'Solo', level: 4, xp: 10, gold: 50, tonics: 2, weapon: 1, falls: 0, quest: 2, questProgress: 3, questState: 'active' }));
+    assert.deepEqual((await repo.load(id))?.story.main, { step: 2, progress: 3, state: 'active' });
 
     const blocked: KeyValueStorage = {
       getItem: () => {

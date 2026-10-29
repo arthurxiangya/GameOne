@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { MAX_LEVEL, QUESTS, buildChunkMesh, generateWorld, killGold, killXp, monsterMaxHp, xpToNext } from '../src/index';
+import { CHAINS, MAX_LEVEL, buildChunkMesh, chainById, generateWorld, killGold, killXp, monsterMaxHp, xpToNext } from '../src/index';
 
 describe('progression rules', () => {
   it('requires more experience for every level', () => {
@@ -13,8 +13,10 @@ describe('progression rules', () => {
     assert.ok(killGold(14, true, 0) >= 150);
   });
 
-  it('has a quest for every monster zone, ending with the boss', () => {
-    assert.equal(QUESTS.at(-1)?.target, 'warden');
+  it('ends the main story with the boss', () => {
+    const last = chainById('main').steps.at(-1)?.objective;
+    assert.equal(last?.kind === 'defeat' && last.monster, 'warden');
+    assert.ok(CHAINS.length >= 4);
     assert.ok(monsterMaxHp('warden', 14) > monsterMaxHp('golem', 12) * 5);
   });
 });

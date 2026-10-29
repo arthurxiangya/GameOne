@@ -5,6 +5,7 @@ import {
   maxHpFor,
   maxMpFor,
   type InputFrame,
+  type LandmarkId,
   type PhysicsBody,
   type PlayerProgress,
   type SkillId,
@@ -30,6 +31,8 @@ export class Player {
   lastInputSeq = 0;
   /** Set when persistent progress changed and the client needs a fresh copy. */
   progressDirty = true;
+  /** The landmark the hero is standing at, so arriving counts once. */
+  atLandmark: LandmarkId | null = null;
 
   constructor(
     readonly id: number,

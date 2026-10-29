@@ -2,9 +2,10 @@ import type { MonsterType } from '../game/monsters';
 import type { NpcAction, NpcId } from '../game/npcs';
 import type { PlayerProgress } from '../game/progress';
 import type { SkillId } from '../game/skills';
+import type { TitleId } from '../game/titles';
 
 /**
- * Wire protocol v2. Messages are JSON objects discriminated by `t`.
+ * Wire protocol v3. Messages are JSON objects discriminated by `t`.
  * Field names are short because snapshots are sent twenty times a second.
  */
 
@@ -24,7 +25,10 @@ export type ClientMessage =
   | { readonly t: 'hello'; readonly v: number; readonly token: string; readonly name: string }
   | { readonly t: 'input'; readonly frames: readonly InputFrame[] }
   | { readonly t: 'skill'; readonly skill: SkillId; readonly target: number | null }
-  | { readonly t: 'npc'; readonly npc: NpcId; readonly action: NpcAction }
+  /** `arg` names the story chain for story actions and the item for `buy`; null otherwise. */
+  | { readonly t: 'npc'; readonly npc: NpcId; readonly action: NpcAction; readonly arg: string | null }
+  /** Choose which earned title shows under your name (null for none). */
+  | { readonly t: 'title'; readonly title: TitleId | null }
   | { readonly t: 'chat'; readonly text: string }
   | { readonly t: 'respawn' }
   | { readonly t: 'ping'; readonly at: number };
@@ -46,6 +50,8 @@ export interface PlayerEntityState {
   readonly nm: string;
   readonly look: number;
   readonly dead: boolean;
+  /** Title shown under the name. */
+  readonly ti: TitleId | null;
 }
 
 export interface MonsterEntityState {
@@ -116,7 +122,9 @@ export type GameEvent =
   | { readonly e: 'target'; readonly id: number | null }
   | { readonly e: 'log'; readonly text: string; readonly c: LogClass }
   | { readonly e: 'toast'; readonly text: string }
-  | { readonly e: 'respawned'; readonly fell: boolean };
+  | { readonly e: 'respawned'; readonly fell: boolean }
+  /** A story step was completed; `text` is what the character says. */
+  | { readonly e: 'story'; readonly title: string; readonly text: string };
 
 export type ServerMessage =
   | {

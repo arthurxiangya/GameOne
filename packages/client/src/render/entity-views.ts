@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { NPCS, damp, lerp, lerpAngle, lookAt, type EntityState, type NpcDef, type Vec3, type VoxelWorld } from '@lanternwood/shared';
+import { damp, lerp, lerpAngle, lookAt, type EntityState, type NpcDef, type Vec3, type VoxelWorld } from '@lanternwood/shared';
 import { buildHero, buildMonster, buildNpc, type ModelRig } from './models';
 
 interface View {
@@ -70,9 +70,9 @@ export class EntityViews {
     for (const id of [...this.views.keys()]) this.remove(id);
   }
 
-  spawnNpcs(world: VoxelWorld): void {
+  spawnNpcs(world: VoxelWorld, npcs: readonly NpcDef[]): void {
     for (const v of this.npcViews) this.scene.remove(v.rig.root);
-    this.npcViews = NPCS.map((npc) => {
+    this.npcViews = npcs.map((npc) => {
       const rig = buildNpc(npc.id);
       const y = world.surfaceY(npc.x, npc.z);
       rig.root.position.set(npc.x, y, npc.z);

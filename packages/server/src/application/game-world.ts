@@ -1,37 +1,50 @@
 import {
+  ACTION_SERVICE,
   NPC_INTERACT_RANGE,
   PHYSICS,
   REGEN,
   SIM_DT,
   SKILL_IDS,
-  npcById,
+  TITLES,
+  bountiesForDay,
+  dayNumber,
+  findNpc,
+  isVisiting,
   sanitizeIntent,
   stepPlayer,
+  type ChainId,
   type GeneratedWorld,
   type InputFrame,
+  type Landmark,
   type MonsterAnim,
   type NpcAction,
+  type NpcDef,
   type NpcId,
   type PlayerProgress,
   type RandomSource,
+  type ShopItemId,
   type SkillId,
+  type TitleId,
   type VoxelWorld,
 } from '@lanternwood/shared';
 import { Monster } from '../domain/entities/monster';
 import { Player } from '../domain/entities/player';
 import { EventBuffer, type RoutedEvent } from '../domain/events';
-import type { Clock } from '../domain/ports';
+import type { Calendar, Clock } from '../domain/ports';
 import { fail, ok, type Result } from '../domain/result';
+import { BountyService } from '../domain/services/bounty-service';
 import { CombatService, type CombatWorld } from '../domain/services/combat-service';
 import { MonsterAi, type AiWorld } from '../domain/services/monster-ai';
+import { ProgressTracker } from '../domain/services/progress-tracker';
 import { ProgressionService } from '../domain/services/progression-service';
-import { QuestService } from '../domain/services/quest-service';
 import { ShopService } from '../domain/services/shop-service';
+import { StoryService } from '../domain/services/story-service';
 import { SpatialHash } from './spatial-hash';
 
 export type PlayerCommand =
   | { readonly kind: 'skill'; readonly skill: SkillId; readonly target: number | null }
-  | { readonly kind: 'npc'; readonly npc: NpcId; readonly action: NpcAction }
+  | { readonly kind: 'npc'; readonly npc: NpcId; readonly action: NpcAction; readonly arg: string | null }
+  | { readonly kind: 'title'; readonly title: TitleId | null }
   | { readonly kind: 'respawn' };
 
 export interface GameWorldOptions {
@@ -39,7 +52,11 @@ export interface GameWorldOptions {
   readonly rng: RandomSource;
   readonly dayLengthSeconds: number;
   readonly startTimeOfDay?: number;
+  /** Calendar for daily bounties. Defaults to the system clock. */
+  readonly calendar?: Calendar;
 }
+
+const systemCalendar: Calendar = { today: () => dayNumber(Date.now()) };
 
 /**
  * Movement is paid for with input credit: one frame per tick of real time. Credit banks up to
@@ -58,6 +75,8 @@ const MAX_QUEUED_INPUTS = 40;
 /** Monsters further than this from every player sleep. */
 const SIMULATION_RADIUS = 90;
 const GRID_CELL = 16;
+/** Landmark visits and the calendar are checked this often, in ticks. */
+const SLOW_CHECK_TICKS = 10;
 
 /**
  * The authoritative simulation. Owns every entity, applies validated player input and
@@ -67,6 +86,8 @@ const GRID_CELL = 16;
 export class GameWorld implements CombatWorld, AiWorld {
   readonly voxels: VoxelWorld;
   readonly seed: number;
+  readonly npcs: readonly NpcDef[];
+  readonly landmarks: readonly Landmark[];
   private readonly spawnPoint: GeneratedWorld['playerSpawn'];
   private readonly playersById = new Map<number, Player>();
   private readonly monstersById = new Map<number, Monster>();
@@ -76,8 +97,12 @@ export class GameWorld implements CombatWorld, AiWorld {
   private readonly clock: Clock = { now: () => this.simTime };
   private readonly combat: CombatService;
   private readonly ai: MonsterAi;
-  private readonly quests: QuestService;
+  private readonly story: StoryService;
+  private readonly bounties: BountyService;
+  private readonly tracker: ProgressTracker;
   private readonly shop: ShopService;
+  private readonly calendar: Calendar;
+  private today: number;
   private nextEntityId = 1;
   private tickCount = 0;
   private simTime = 0;
@@ -87,13 +112,19 @@ export class GameWorld implements CombatWorld, AiWorld {
     const { generated, rng } = options;
     this.voxels = generated.world;
     this.seed = generated.seed;
+    this.npcs = generated.npcs;
+    this.landmarks = generated.landmarks;
     this.spawnPoint = generated.playerSpawn;
     this.dayTime = options.startTimeOfDay ?? 0.33;
+    this.calendar = options.calendar ?? systemCalendar;
+    this.today = this.calendar.today();
 
     const progression = new ProgressionService(this.events);
-    this.quests = new QuestService(this.events, progression, rng);
-    this.shop = new ShopService(this.events);
-    this.combat = new CombatService(this, rng, this.clock, this.events, progression, this.quests);
+    this.story = new StoryService(this.events, progression, rng);
+    this.bounties = new BountyService(this.events, progression, (day) => bountiesForDay(generated.seed, day, { duels: false }));
+    this.tracker = new ProgressTracker(this.story, this.bounties, this.calendar);
+    this.shop = new ShopService(this.events, progression);
+    this.combat = new CombatService(this, rng, this.clock, this.events, progression, this.tracker);
     this.ai = new MonsterAi(this, this.combat, this.events, rng);
 
     for (const s of generated.monsterSpawns) {
@@ -163,6 +194,7 @@ export class GameWorld implements CombatWorld, AiWorld {
     const player = new Player(this.nextEntityId++, accountId, look, progress, this.spawnPoint);
     player.teleport(this.spawnPoint);
     player.inputCredit = INITIAL_INPUT_CREDIT;
+    this.bounties.refresh(player, this.today);
     this.playersById.set(player.id, player);
     this.playerGrid.rebuild(this.playersById.values());
     return player;
@@ -208,7 +240,10 @@ export class GameWorld implements CombatWorld, AiWorld {
         result = this.combat.useSkill(player, command.skill, command.target);
         break;
       case 'npc':
-        result = this.interact(player, command.npc, command.action);
+        result = this.interact(player, command.npc, command.action, command.arg);
+        break;
+      case 'title':
+        result = this.chooseTitle(player, command.title);
         break;
       case 'respawn':
         result = this.revive(player);
@@ -227,6 +262,7 @@ export class GameWorld implements CombatWorld, AiWorld {
 
     for (const player of this.playersById.values()) this.stepPlayer(player, dt);
     this.playerGrid.rebuild(this.playersById.values());
+    if (this.tickCount % SLOW_CHECK_TICKS === 0) this.slowChecks();
 
     this.combat.update(dt);
     for (const m of this.monstersById.values()) {
@@ -308,23 +344,56 @@ export class GameWorld implements CombatWorld, AiWorld {
     return ok();
   }
 
-  private interact(player: Player, npcId: NpcId, action: NpcAction): Result {
-    const npc = npcById(npcId);
-    if (!npc || !npc.actions.includes(action)) return fail('They cannot help you with that.');
+  /** Arrivals at landmarks, and moving everyone onto a new day's bounties at midnight UTC. */
+  private slowChecks(): void {
+    const today = this.calendar.today();
+    const newDay = today !== this.today;
+    this.today = today;
+    for (const player of this.playersById.values()) {
+      if (newDay && this.bounties.refresh(player, today)) {
+        this.events.player(player.id, { e: 'toast', text: 'New bounties are posted in Emberhold.' });
+      }
+      if (player.dead) continue;
+      const { x, y, z } = player.body;
+      const at = this.landmarks.find((l) => isVisiting(l, x, y, z)) ?? null;
+      if (at && at.id !== player.atLandmark) this.tracker.record(player, { kind: 'visit', place: at.id });
+      player.atLandmark = at?.id ?? null;
+    }
+  }
+
+  private interact(player: Player, npcId: NpcId, action: NpcAction, arg: string | null): Result {
+    const npc = findNpc(this.npcs, npcId);
+    if (!npc) return fail('They are not here.');
+    const service = ACTION_SERVICE[action];
+    if (service && !npc.services.includes(service)) return fail('They cannot help you with that.');
     if (player.dead) return fail('You are defeated.');
     if (Math.hypot(npc.x - player.body.x, npc.z - player.body.z) > NPC_INTERACT_RANGE + 0.5) {
       return fail(`Walk closer to ${npc.name}.`);
     }
     switch (action) {
-      case 'questAccept':
-        return this.quests.accept(player);
-      case 'questTurnIn':
-        return this.quests.turnIn(player);
+      case 'greet':
+        this.tracker.record(player, { kind: 'greet', npc: npc.id });
+        return ok();
+      case 'accept':
+        return this.story.accept(player, arg as ChainId, npc.id);
+      case 'turnIn':
+        return this.story.turnIn(player, arg as ChainId, npc.id);
+      case 'talk':
+        return this.story.talk(player, arg as ChainId, npc.id);
       case 'buyTonic':
         return this.shop.buyTonic(player);
       case 'sharpen':
         return this.shop.sharpen(player);
+      case 'buy':
+        return this.shop.buy(player, arg as ShopItemId);
     }
+  }
+
+  private chooseTitle(player: Player, title: TitleId | null): Result {
+    if (title !== null && !player.progress.titles.includes(title)) return fail(`You have not earned ${TITLES[title].name} yet.`);
+    player.progress.title = title;
+    player.touchProgress();
+    return ok();
   }
 
   private rebuildGrids(): void {

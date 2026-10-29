@@ -57,10 +57,10 @@ describe('combat', () => {
     assert.equal(r.ok, false);
   });
 
-  it('rewards the killer with gold, experience and quest progress', () => {
+  it('rewards the killer with gold, experience and story progress', () => {
     const world = makeWorld();
     const hero = spawnHero(world);
-    hero.progress.questState = 'active';
+    hero.progress.story.main.state = 'active';
     const puffcap = monsterOf(world, 'puffcap');
     standNextTo(hero, puffcap);
     puffcap.hp = 1;
@@ -70,7 +70,7 @@ describe('combat', () => {
     assert.equal(puffcap.alive, false);
     assert.ok(hero.progress.gold > 0);
     assert.ok(hero.progress.xp > 0 || hero.progress.level > 1);
-    assert.equal(hero.progress.questProgress, 1);
+    assert.equal(hero.progress.story.main.progress, 1);
     assert.ok(hero.progressDirty);
   });
 

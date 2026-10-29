@@ -5,6 +5,12 @@ export interface Clock {
   now(): number;
 }
 
+/** Calendar days for daily content such as bounties. */
+export interface Calendar {
+  /** Days since 1970-01-01 UTC. */
+  today(): number;
+}
+
 /** A hero as stored between sessions. */
 export interface PlayerRecord extends PlayerProgress {
   readonly accountId: string;

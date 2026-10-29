@@ -1,4 +1,4 @@
-# Wire protocol (v2)
+# Wire protocol (v3)
 
 All messages are JSON text frames on `ws(s)://<host>/ws`, discriminated by the `t` field. Types live in [`packages/shared/src/protocol/messages.ts`](../packages/shared/src/protocol/messages.ts). Client messages are validated by `parseClientMessage`; anything else is rejected with an `error`. Field names are short because snapshots go out twenty times a second.
 
@@ -21,7 +21,8 @@ client                                   server
 | `hello` | `v`, `token`, `name` | `v` must equal `PROTOCOL_VERSION`. The name is sanitised to 2–14 letters, numbers, spaces and `_ ' . -`. |
 | `input` | `frames: InputFrame[]` (1–10) | Each frame is one `SIM_DT` step: `{seq, fwd, strafe, yaw, jump, swim}`. `fwd` and `strafe` are in [-1, 1], relative to the camera `yaw`. |
 | `skill` | `skill`, `target` | `skill` is one of `strike`, `bolt`, `mend`, `ring`, `tonic`. `target` is an entity id or `null` (the server picks the nearest monster in front). |
-| `npc` | `npc`, `action` | `maren`: `questAccept`, `questTurnIn`. `oda`: `buyTonic`, `sharpen`. You must stand within 4.5 blocks. |
+| `npc` | `npc`, `action`, `arg` | You must stand within 4.5 blocks of the character. `greet` opens a conversation (it counts for bounties). `accept`, `turnIn` and `talk` take a story chain id in `arg` (`main`, `bell`, `thief`, `rift`); the server checks that this character gives, takes back or is the subject of that step. `buyTonic` and `sharpen` need a character with the forge (Oda); `buy` needs one who trades Ember Marks and takes an item id in `arg` (`tonicSatchel`, `lanternbearer`). `arg` is `null` otherwise. |
+| `title` | `title` | Show one of your earned titles under your name, or `null` for none. |
 | `chat` | `text` | Sanitised and capped at 140 characters; at most one every two seconds after a burst of five. |
 | `respawn` | — | Only while defeated. |
 | `ping` | `at` | Echoed back in `pong` for round-trip measurement. |
@@ -33,7 +34,7 @@ client                                   server
 | `welcome` | `v`, `you`, `seed`, `tickRate`, `look`, `progress`, `day`, `dayLength` | `you` is your entity id. Generate the world locally from `seed`. |
 | `reject` | `reason` | Sent before the server closes a failed hello (old client, full server, load failure). |
 | `snapshot` | `tick`, `st`, `day`, `ack`, `you`, `ents`, `ev` | See below. |
-| `progress` | `p` | Your persistent progress, sent whenever it changes. |
+| `progress` | `p` | Your persistent progress, sent whenever it changes: level, gold and tonics, each story chain's step and state, today's bounties, Ember Marks and titles. Bounties are sent as ids; `bountyFromId` in `shared` rebuilds them. |
 | `chat` | `from`, `text` | Broadcast to everyone online. |
 | `system` | `text` | Join and leave announcements. |
 | `error` | `reason` | A rejected message, or chat sent too fast. Safe to show. |
@@ -45,7 +46,7 @@ client                                   server
 - `ack` — the highest input `seq` the server has applied. Replay any later frames on top of `you`.
 - `you` — your full-precision physics body plus `hp`, `mhp`, `mp`, `mmp`, `dead`, and `cd` (remaining cooldown per skill).
 - `ents` — delta-encoded entities within the interest radius. The first time an entity is sent to you it arrives in full:
-  - Player: `{k:'p', id, x, y, z, yaw, hp, mhp, lv, nm, look, dead}`
+  - Player: `{k:'p', id, x, y, z, yaw, hp, mhp, lv, nm, look, dead, ti}` where `ti` is the title shown under the name, or `null`.
   - Monster: `{k:'m', id, x, y, z, yaw, hp, mhp, lv, ty, sc, st}` where `st` is `idle`, `move`, `attack` or `dead`.
 
   After that, only `id` plus the fields that changed since your previous snapshot are sent (for example `{id: 12, x: 4.31, z: -7.02}`). An entity that changed nothing is left out entirely. Apply patches on top of the known state (`applyEntityUpdates` in `shared`).
@@ -68,6 +69,7 @@ client                                   server
 | `log` | `text`, `c` | Message log line; `c` is `sys`, `foe`, `loot` or `good` (private) |
 | `toast` | `text` | Short on-screen notice, e.g. why an action failed (private) |
 | `respawned` | `fell` | You were moved to town (private) |
+| `story` | `title`, `text` | You completed a story step; `text` is what the character says (private) |
 
 ## Close codes
 
@@ -88,3 +90,4 @@ Any incompatible change bumps `PROTOCOL_VERSION`. Older clients are rejected at 
 | --- | --- |
 | 1 | First release: full snapshots at 10/s |
 | 2 | Delta snapshots (`ents` patches and `gone`) at 20/s |
+| 3 | Story chains, daily bounties, Ember Marks and titles: `npc` gains `arg`, new `title` message, `ti` on players, `story` event |
