@@ -4,7 +4,7 @@ A voxel MMORPG for the browser. An authoritative Node.js game server simulates a
 
 - **Shared world, real players.** Everyone online is in the same realm, sees each other move and fight, and can chat.
 - **Five zones and a hub town.** Emberhold, Sunmeadow, Reedmere, Lanternwood, the Amber Dunes and Frostspine Peaks, with leveled monsters and a final boss.
-- **Five classes.** Warden (tank), Lightkeeper (healer), Ranger and Emberblade (damage) and Chimer (support), each with its own resource, four skills and two specializations from level 10. Pick one on the title screen; change in Emberhold any time (C). Classes are data (`shared/src/game/classes.ts`), and a balance test plays every build through the real server.
+- **Five classes.** Warden (tank), Lightkeeper (healer), Ranger and Emberblade (damage) and Chimer (support), each with its own resource, four skills, two specializations from level 10 and four talent rows (levels 5, 8, 15 and 18, three choices each). Pick one on the title screen; change in Emberhold any time (C). Classes are data (`shared/src/game/classes.ts`), and a balance test plays every build through the real server.
 - **Stories.** Four story chains told by seven characters: the main quest to the Warden of the Frost Heart, plus The Drowned Bell, The Lantern Thief and Glass of the Rift, with objectives to defeat, collect, find and talk. Stories are data (`shared/src/game/story.ts`), run by one engine on the server.
 - **Daily bounties.** Captain Rook posts three new bounties every day at midnight UTC, the same for everyone, paying gold, XP and Ember Marks.
 - **Lantern Night.** Every third night the Night Bell rings and the Gloom marches on Emberhold in five waves, ending with the Gloom Knight. Everyone online defends the Great Lantern together; winners earn Ember Marks, a XP blessing and, after five wins, the Gloom Steed.
@@ -130,15 +130,15 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing code. It expla
 | Healing tonic | Q | Flask button |
 | Jump or swim up | Space | Jump button |
 | Talk to an NPC | E, or click them | Talk button, or tap them |
-| Class, skills and specialization | C | Shield button |
+| Class, skills, specialization and talents | C | Shield button |
 | Chat | Enter | Speech bubble button |
 
 ## Testing
 
-`npm test` runs about 190 tests:
+`npm test` runs about 200 tests:
 
 - **Shared:** deterministic world generation, collision physics, protocol validation, game rules and chunk meshing.
-- **Server:** combat and every class mechanic, the balance test (every class and spec played through the real server), stories and bounties, save migration, monster AI, the speed-hack guard, session handling (rate limits, duplicate logins, full server), persistence, and a real WebSocket end-to-end test with two players.
+- **Server:** combat and every class mechanic, the balance test (every class, spec and talent played through the real server), stories and bounties, save migration, monster AI, the speed-hack guard, session handling (rate limits, duplicate logins, full server), persistence, and a real WebSocket end-to-end test with two players.
 - **Client:** prediction and reconciliation converge with the server, snapshot interpolation, clock sync, and single-player play through the in-page server.
 
 CI also runs real-browser checks in headless Chromium with WebGL: two players join the online build, see each other move and chat, and the single-player preview loads, renders and plays. It then builds the Docker image and checks that the container serves the game.

@@ -158,6 +158,10 @@ input[type='text']:focus-visible { outline: 2px solid var(--lantern); outline-of
 .skill-row .skill-ico svg { width: 20px; height: 20px; }
 .skill-row b, .skill-row span { grid-column: 2; }
 .skill-row em { grid-column: 3; }
+.talent-row { margin-top: 4px !important; font-size: 10.5px !important; color: var(--ink-dim) !important; letter-spacing: 0.04em; }
+.talent-opts { display: grid; gap: 4px; }
+.j-row.talent { grid-template-columns: 1fr; }
+.j-row.talent[aria-pressed='true'] { border-color: var(--lantern); }
 
 /* target frame */
 .tframe {

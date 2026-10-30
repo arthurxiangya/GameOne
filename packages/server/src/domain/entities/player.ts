@@ -1,16 +1,15 @@
 import {
   CLASSES,
-  activeSpec,
   classArmor,
   classMaxHp,
   createBody,
-  kitFor,
+  loadout,
   maxResourceFor,
-  passiveOf,
   powerFor,
   type ClassDef,
   type ClassId,
   type InputFrame,
+  type Loadout,
   type LandmarkId,
   type MountId,
   type PhysicsBody,
@@ -19,6 +18,9 @@ import {
   type SkillDef,
   type SkillId,
   type SpecDef,
+  type SpecId,
+  type TalentDef,
+  type TalentPicks,
   type Vec3,
 } from '@lanternwood/shared';
 import { StatusList } from '../statuses';
@@ -60,6 +62,8 @@ export class Player {
   blessedUntil = 0;
   /** The rift party the hero fights with, or null. */
   party: number | null = null;
+  /** The last loadout, reused while class, level, spec and talent picks are unchanged (picks are replaced, never edited). */
+  private memo: { cls: ClassId; level: number; spec: SpecId | undefined; picks: TalentPicks | undefined; value: Loadout } | null = null;
   /** In a duel, both heroes fight at the lower level: their health, resource and Power use this. */
   duelLevel: number | null = null;
 
@@ -96,22 +100,42 @@ export class Player {
     return CLASSES[this.progress.cls];
   }
 
-  /** The specialization in use: chosen for this class, from level 10 (by real level, not a duel's). */
+  /**
+   * Spec, talents, skills and passive at the stat level. In a duel both heroes fight at the lower
+   * level, so a spec or talent row the lower hero hasn't reached is off for both.
+   */
+  get loadout(): Loadout {
+    const cls = this.progress.cls;
+    const level = this.statLevel;
+    const spec = this.progress.specs[cls];
+    const picks = this.progress.talents[cls];
+    const m = this.memo;
+    if (m && m.cls === cls && m.level === level && m.spec === spec && m.picks === picks) return m.value;
+    const value = loadout(cls, this.progress, level);
+    this.memo = { cls, level, spec, picks, value };
+    return value;
+  }
+
   get spec(): SpecDef | null {
-    return activeSpec(this.progress.cls, this.progress.specs, this.progress.level);
+    return this.loadout.spec;
+  }
+
+  get talents(): readonly TalentDef[] {
+    return this.loadout.talents;
   }
 
   get passive(): Passive {
-    return passiveOf(this.spec);
+    return this.loadout.passive;
   }
 
-  /** The four class skills, with the spec's changes. */
+  /** The four class skills, with the spec's and talents' changes. */
   get kit(): readonly SkillDef[] {
-    return kitFor(this.progress.cls, this.spec);
+    return this.loadout.kit;
   }
 
   get maxHp(): number {
-    return classMaxHp(this.progress.cls, this.statLevel, this.spec);
+    const l = this.loadout;
+    return classMaxHp(this.progress.cls, this.statLevel, l.spec, l.talents);
   }
 
   /** Size of the class resource pool. */
@@ -125,7 +149,8 @@ export class Player {
   }
 
   get armor(): number {
-    return classArmor(this.progress.cls, this.spec);
+    const l = this.loadout;
+    return classArmor(this.progress.cls, l.spec, l.talents);
   }
 
   cooldown(id: SkillId): number {

@@ -48,6 +48,14 @@ describe('parseClientMessage', () => {
     assert.equal(parseClientMessage({ t: 'class', cls: 'ranger' }).ok, false);
   });
 
+  it('accepts a talent pick only as a row 0–3 and a choice 0–2 or null', () => {
+    assert.deepEqual(parseClientMessage({ t: 'talent', row: 2, pick: 1 }), { ok: true, msg: { t: 'talent', row: 2, pick: 1 } });
+    assert.ok(parseClientMessage({ t: 'talent', row: 0, pick: null }).ok);
+    for (const bad of [{ row: 4, pick: 0 }, { row: 1, pick: 3 }, { row: 1.5, pick: 0 }, { row: 1, pick: '0' }, { row: 1 }]) {
+      assert.equal(parseClientMessage({ t: 'talent', ...bad }).ok, false, JSON.stringify(bad));
+    }
+  });
+
   it('requires a known story for story actions and a known item for trades', () => {
     assert.ok(parseClientMessage({ t: 'npc', npc: 'tamsin', action: 'accept', arg: 'bell' }).ok);
     assert.equal(parseClientMessage({ t: 'npc', npc: 'tamsin', action: 'accept', arg: 'nope' }).ok, false);

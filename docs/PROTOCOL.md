@@ -1,4 +1,4 @@
-# Wire protocol (v9)
+# Wire protocol (v10)
 
 All messages are JSON text frames on `ws(s)://<host>/ws`, discriminated by the `t` field. Types live in [`packages/shared/src/protocol/messages.ts`](../packages/shared/src/protocol/messages.ts). Client messages are validated by `parseClientMessage`; anything else is rejected with an `error`. Field names are short because snapshots go out twenty times a second.
 
@@ -21,6 +21,7 @@ client                                   server
 | `hello` | `v`, `token`, `name` | `v` must equal `PROTOCOL_VERSION`. The name is sanitised to 2–14 letters, numbers, spaces and `_ ' . -`. |
 | `input` | `frames: InputFrame[]` (1–10) | Each frame is one `SIM_DT` step: `{seq, fwd, strafe, yaw, jump, swim}`. `fwd` and `strafe` are in [-1, 1], relative to the camera `yaw`. |
 | `skill` | `skill`, `target` | `skill` is one of your class's four skills or `tonic` (see `kitFor` in `shared`); anything else is refused. `target` is an entity id or `null`: enemy skills use a monster (or your duel opponent), and fall back to the nearest monster in front; ally skills (Mend, Lantern Ward) use the hero you target, or yourself. |
+| `talent` | `row`, `pick` | Pick talent `pick` (0–2) in `row` (0–3) for your current class, or `null` to clear the row. The row must be open (levels 5, 8, 15, 18); out of combat and outside a mode. Free. |
 | `class` | `cls`, `spec` | Change class (in Emberhold, out of combat) and choose a specialization of that class, or `null` (level 10 and up, out of combat, outside a mode). Free. |
 | `npc` | `npc`, `action`, `arg` | You must stand within 4.5 blocks of the character. `greet` opens a conversation (it counts for bounties). `accept`, `turnIn` and `talk` take a story chain id in `arg` (`main`, `bell`, `thief`, `rift`); the server checks that this character gives, takes back or is the subject of that step. `buyTonic` and `sharpen` need a character with the forge (Oda); `buy` needs one who trades and takes an item id in `arg` (see `SHOP_ITEMS`). `race` starts an Ember Run at Pip the Runner. `rift` asks Seer Ilka to open a rift (level 6 and up). `arg` is `null` otherwise. |
 | `title` | `title` | Show one of your earned titles under your name, or `null` for none. |
@@ -109,3 +110,4 @@ Any incompatible change bumps `PROTOCOL_VERSION`. Older clients are rejected at 
 | 7 | Rift Trials: `npc` action `rift`, `rift` mode state, the `riftlord` monster |
 | 8 | Duel Ring: `duel` message, `duel` mode state, player-versus-player hits in duels |
 | 9 | Classes: `cls` in `hello`, `class` message, class skill ids, `st` and `sh` in `you`, `cl` on players, colours on `bolt` and `ring`, `fx` event |
+| 10 | Talents: `talent` message; `talents` in `progress` |

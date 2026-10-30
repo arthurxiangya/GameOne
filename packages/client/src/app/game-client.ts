@@ -12,13 +12,11 @@ import {
   SIM_DT,
   TITLES,
   TONIC,
-  activeSpec,
   coursePoints,
   generateWorld,
-  kitFor,
+  loadout,
   medalTimes,
   mountSpeed,
-  passiveOf,
   powerFor,
   zoneForBiome,
   type ChainId,
@@ -210,7 +208,10 @@ export class GameClient {
     this.overlay = new Overlay(byId('overlay'), (x, y, z) => this.ctx.toScreen(x, y, z));
     this.minimap = new Minimap(byId<HTMLCanvasElement>('minimap'));
     this.title = new TitleScreen(this.identity.name, this.playerClass);
-    this.classPanel = new ClassPanel({ choose: (cls, spec) => this.connection.send({ t: 'class', cls, spec }) });
+    this.classPanel = new ClassPanel({
+      choose: (cls, spec) => this.connection.send({ t: 'class', cls, spec }),
+      talent: (row, pick) => this.connection.send({ t: 'talent', row, pick }),
+    });
     this.journal = new JournalView({
       track: (id) => this.track(id),
       title: (id) => this.connection.send({ t: 'title', title: id }),
@@ -472,9 +473,9 @@ export class GameClient {
   private onProgress(p: PlayerProgress): void {
     const before = this.progress;
     this.progress = p;
-    const spec = activeSpec(p.cls, p.specs, p.level);
-    this.kit = kitFor(p.cls, spec);
-    this.hud.setKit(p.cls, this.kit, powerFor(p.level, p.weapon), passiveOf(spec));
+    const gear = loadout(p.cls, p, p.level);
+    this.kit = gear.kit;
+    this.hud.setKit(p.cls, this.kit, powerFor(p.level, p.weapon), gear.passive);
     if (before && before.cls !== p.cls) {
       this.cooldowns = {};
       this.playerClass = p.cls;

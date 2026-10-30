@@ -3,10 +3,12 @@ import {
   CLASS_IDS,
   RESOURCES,
   SPEC_LEVEL,
-  activeSpec,
+  TALENTS,
+  TALENT_LEVELS,
+  TALENT_ROW_THEMES,
   describeSkill,
   kitFor,
-  passiveOf,
+  loadout,
   powerFor,
   type ClassId,
   type PlayerProgress,
@@ -19,6 +21,8 @@ import { iconSvg } from './skill-icons';
 export interface ClassPanelHandlers {
   /** Ask the server for this class and spec. */
   choose(cls: ClassId, spec: SpecId | null): void;
+  /** Pick a talent for your current class (or clear the row with null). */
+  talent(row: number, pick: number | null): void;
 }
 
 export const ROLE_NAMES: Readonly<Record<Role, string>> = { tank: 'Tank', healer: 'Healer', damage: 'Damage', support: 'Support' };
@@ -61,9 +65,9 @@ export class ClassPanel {
     const cls = this.viewing ?? p.cls;
     const def = CLASSES[cls];
     const mine = cls === p.cls;
-    const spec = activeSpec(cls, p.specs, p.level);
+    const gear = loadout(cls, p, p.level);
     const power = powerFor(p.level, p.weapon);
-    const passive = passiveOf(spec);
+    const passive = gear.passive;
 
     const picker = el('div', 'chips cls-tabs');
     for (const id of CLASS_IDS) {
@@ -94,7 +98,7 @@ export class ClassPanel {
 
     const skills = el('section', 'j-sec');
     skills.append(el('h3', undefined, mine ? `Your skills at ${Math.round(power)} Power` : `Skills at ${Math.round(power)} Power`));
-    for (const s of kitFor(cls, mine ? spec : null)) {
+    for (const s of mine ? gear.kit : kitFor(cls, null)) {
       const row = el('div', `j-row static skill-row${p.level < s.unlockLevel ? ' quiet' : ''}`);
       const icon = el('i', 'skill-ico');
       icon.innerHTML = iconSvg(s.icon);
@@ -123,6 +127,28 @@ export class ClassPanel {
     }
     if (!mine && p.level >= SPEC_LEVEL) specs.append(el('p', 'dim', `Become a ${def.name} to choose.`));
 
-    this.body.replaceChildren(picker, about, skills, specs);
+    const talents = el('section', 'j-sec');
+    talents.append(el('h3', undefined, 'Talents'));
+    talents.append(el('p', 'dim', 'One choice per row. Free to change out of combat.'));
+    const picks = p.talents[cls] ?? [];
+    TALENTS[cls].forEach((options, row) => {
+      const needed = TALENT_LEVELS[row]!;
+      const open = p.level >= needed;
+      talents.append(el('p', 'talent-row', `${TALENT_ROW_THEMES[row]} · level ${needed}${open ? '' : ' (locked)'}`));
+      const group = el('div', 'talent-opts');
+      options.forEach((t, i) => {
+        const chosen = picks[row] === t.id;
+        const b = el('button', `j-row talent${chosen ? ' on' : ''}`);
+        b.type = 'button';
+        b.disabled = !mine || !open;
+        b.setAttribute('aria-pressed', String(chosen));
+        b.append(el('b', undefined, t.name), el('span', undefined, t.text));
+        b.addEventListener('click', () => this.handlers.talent(row, chosen ? null : i));
+        group.append(b);
+      });
+      talents.append(group);
+    });
+
+    this.body.replaceChildren(picker, about, skills, specs, talents);
   }
 }

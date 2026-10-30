@@ -75,6 +75,11 @@ export function parseClientMessage(data: unknown): ParseResult {
       if (data.spec !== null && !spec) return fail('Unknown specialization');
       return okMsg({ t: 'class', cls: data.cls, spec: spec?.id ?? null });
     }
+    case 'talent': {
+      if (!Number.isInteger(data.row) || (data.row as number) < 0 || (data.row as number) > 3) return fail('Unknown talent row');
+      if (data.pick !== null && (!Number.isInteger(data.pick) || (data.pick as number) < 0 || (data.pick as number) > 2)) return fail('Unknown talent');
+      return okMsg({ t: 'talent', row: data.row as number, pick: data.pick as number | null });
+    }
     case 'title': {
       if (data.title !== null && !isTitleId(data.title)) return fail('Unknown title');
       return okMsg({ t: 'title', title: data.title as TitleId | null });

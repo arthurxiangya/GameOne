@@ -80,6 +80,8 @@ export interface SkillDef {
   readonly effects: readonly SkillEffect[];
   /** The caster heals for this share of the damage the skill deals. */
   readonly leech: number;
+  /** Enemy skills with a radius: share of the damage that splashes onto everything else near the target. */
+  readonly splash: number;
   /** Extra crit chance on this skill. */
   readonly crit: number;
   /** Colour of the projectile or ring. */
@@ -99,6 +101,7 @@ export const skill = (
   range: 0,
   radius: 0,
   leech: 0,
+  splash: 1,
   crit: 0,
   color: 0xffc066,
   ...s,

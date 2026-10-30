@@ -9,6 +9,8 @@ import {
   REGEN,
   SIM_DT,
   SPEC_LEVEL,
+  TALENTS,
+  TALENT_LEVELS,
   TITLES,
   bountiesForDay,
   dayNumber,
@@ -69,6 +71,7 @@ export type PlayerCommand =
   | { readonly kind: 'npc'; readonly npc: NpcId; readonly action: NpcAction; readonly arg: string | null }
   | { readonly kind: 'title'; readonly title: TitleId | null }
   | { readonly kind: 'class'; readonly cls: ClassId; readonly spec: SpecId | null }
+  | { readonly kind: 'talent'; readonly row: number; readonly pick: number | null }
   | { readonly kind: 'mount'; readonly on: boolean }
   | { readonly kind: 'chooseMount'; readonly mount: MountId | null }
   | { readonly kind: 'choosePet'; readonly pet: PetId | null }
@@ -325,6 +328,9 @@ export class GameWorld implements CombatWorld, AiWorld {
       case 'class':
         result = this.changeClass(player, command.cls, command.spec);
         break;
+      case 'talent':
+        result = this.chooseTalent(player, command.row, command.pick);
+        break;
       case 'mount':
         result = command.on ? this.callMount(player) : this.mounts.dismiss(player);
         break;
@@ -463,6 +469,30 @@ export class GameWorld implements CombatWorld, AiWorld {
     return ok();
   }
 
+  /** A talent pick for the current class: out of combat, outside a mode, once its row is open. */
+  private chooseTalent(player: Player, row: number, pick: number | null): Result {
+    if (player.dead) return fail('You are defeated.');
+    const now = this.simTime;
+    if (now - player.lastHurtAt < OUT_OF_COMBAT_SECONDS || now - player.lastAttackAt < OUT_OF_COMBAT_SECONDS) return fail('Not while fighting.');
+    if (this.modes.some((mode) => mode.status(player) !== null)) return fail('Finish what you are doing first.');
+    const needed = TALENT_LEVELS[row];
+    const options = TALENTS[player.cls][row];
+    if (needed === undefined || !options) return fail('There is no such talent.');
+    if (player.level < needed) return fail(`That row opens at level ${needed}.`);
+    const talent = pick === null ? null : options[pick];
+    if (pick !== null && !talent) return fail('There is no such talent.');
+    const picks = [...(player.progress.talents[player.cls] ?? [null, null, null, null])];
+    while (picks.length < TALENT_LEVELS.length) picks.push(null);
+    if (picks[row] === (talent?.id ?? null)) return ok();
+    player.switchClass(() => {
+      picks[row] = talent?.id ?? null;
+      player.progress.talents[player.cls] = picks;
+    });
+    player.touchProgress();
+    this.events.player(player.id, { e: 'log', text: talent ? `Talent: ${talent.name}.` : 'Talent cleared.', c: 'good' });
+    return ok();
+  }
+
   private callMount(player: Player): Result {
     for (const mode of this.modes) {
       const reason = mode.mountBlocked?.(player);
@@ -483,9 +513,10 @@ export class GameWorld implements CombatWorld, AiWorld {
   // ------------------------------------------------------------------ internals
 
   private stepPlayer(player: Player, dt: number): void {
+    const recovery = dt * (1 + (player.passive.haste ?? 0));
     for (const [id, left] of player.cooldowns) {
-      if (left <= dt) player.cooldowns.delete(id);
-      else player.cooldowns.set(id, left - dt);
+      if (left <= recovery) player.cooldowns.delete(id);
+      else player.cooldowns.set(id, left - recovery);
     }
 
     player.inputCredit = Math.min(MAX_INPUT_CREDIT, player.inputCredit + dt / SIM_DT);
@@ -532,7 +563,7 @@ export class GameWorld implements CombatWorld, AiWorld {
     const resource = player.classDef.resource;
     const rate = fighting ? resource.regenInCombat : resource.regenOutOfCombat;
     // The Reed Frogling quickens any resource that refills; draining pools (Resolve, Heat) still drain.
-    const boosted = rate > 0 ? rate * (1 + activePetBonus(player.progress, 'mana')) : rate;
+    const boosted = rate > 0 ? rate * (1 + activePetBonus(player.progress, 'mana') + (player.passive.haste ?? 0)) : rate;
     player.mp = Math.max(0, Math.min(player.maxMp, player.mp + boosted * dt));
     if (!recentlyHurt && player.hp < player.maxHp) {
       player.hp = Math.min(player.maxHp, player.hp + player.maxHp * REGEN.healthFractionPerSecond * dt);

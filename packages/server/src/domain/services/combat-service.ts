@@ -58,6 +58,8 @@ const VERTICAL_REACH = 5;
 /** Area skills reach this far up or down. */
 const AREA_VERTICAL = 3;
 const HERO_RADIUS = 0.3;
+/** A guard talent works below this share of health. */
+const GUARD_BELOW = 0.35;
 
 /**
  * Skills, damage, healing, statuses, deaths and kill rewards. Every class skill runs through
@@ -249,7 +251,10 @@ export class CombatService {
     for (const effect of def.effects) {
       switch (effect.kind) {
         case 'damage':
-          for (const foe of foes) dealt += this.hit(caster, def, foe, effect.k, multi);
+          // An enemy skill's first foe is its target; the rest take the splash share.
+          foes.forEach((foe, i) => {
+            dealt += this.hit(caster, def, foe, effect.k * (def.target === 'enemy' && i > 0 ? def.splash : 1), multi);
+          });
           break;
         case 'heal':
           for (const t of effect.to === 'self' ? [caster] : allies) {
@@ -343,9 +348,10 @@ export class CombatService {
     }
   }
 
-  /** Armour and damage-taken statuses, never more than 60% off together. */
+  /** Armour, damage-taken statuses and a low-health guard, never more than 60% off together. */
   private mitigate(player: Player, amount: number): number {
-    const taken = (1 - player.armor) * (1 + capModifier(player.statuses.sum('damageTaken', this.clock.now())));
+    const guard = player.hp < player.maxHp * GUARD_BELOW ? player.passive.guard ?? 0 : 0;
+    const taken = (1 - player.armor) * (1 + capModifier(player.statuses.sum('damageTaken', this.clock.now()))) * (1 - guard);
     return amount * Math.max(1 - DAMAGE_REDUCTION_CAP, taken);
   }
 
@@ -395,6 +401,8 @@ export class CombatService {
     this.progression.grantGold(killer, gold);
     this.events.player(killer.id, { e: 'log', text: `${monster.def.name} defeated · +${gold} gold`, c: 'loot' });
     this.progression.grantXp(killer, killXp(monster.level, killer.level, monster.def.boss) * bonus('xp'));
+    const onKill = killer.passive.onKill ?? 0;
+    if (onKill > 0 && !killer.dead) this.heal(killer, killer.maxHp * onKill);
     this.achievements.record(killer, { kind: 'kill', monster: monster.type, level: monster.level });
     if (!monster.def.boss && this.rng.next() < TONIC_DROP_CHANCE * (1 + activePetBonus(killer.progress, 'tonicDrops'))) {
       killer.progress.tonics += 1;
