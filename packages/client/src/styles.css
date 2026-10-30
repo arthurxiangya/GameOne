@@ -162,6 +162,14 @@ input[type='text']:focus-visible { outline: 2px solid var(--lantern); outline-of
 .talent-opts { display: grid; gap: 4px; }
 .j-row.talent { grid-template-columns: 1fr; }
 .j-row.talent[aria-pressed='true'] { border-color: var(--lantern); }
+/* gear */
+.gear-stats { margin: 0; font: 600 13px var(--font-mono); font-variant-numeric: tabular-nums; }
+.gear-row .gear-acts, .gear-row .gear-reforge { grid-column: 1 / -1; }
+.gear-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.btn.small { min-height: 32px; padding: 6px 10px; font-size: 11.5px; }
+.gear-reforge { display: grid; gap: 6px; margin-top: 6px; }
+.gear-reforge .chips { align-items: center; }
+.gear-from { font-size: 11.5px; color: var(--ink-dim); min-width: 64px; }
 
 /* target frame */
 .tframe {

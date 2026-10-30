@@ -22,10 +22,12 @@ export class StatusList {
     return this.list.length;
   }
 
+  /** Re-applying refreshes the status and keeps its tick clock, so a burn refreshed often still ticks every second. */
   apply(def: StatusDef, now: number, sourceId: number, perSecond = 0): void {
     const existing = this.list.find((s) => s.def.id === def.id);
     if (existing) this.list.splice(this.list.indexOf(existing), 1);
-    this.list.push({ def, until: now + def.seconds, sourceId, perSecond, carry: 0, ticksLeft: perSecond > 0 ? Math.round(def.seconds) : 0 });
+    const carry = existing && existing.ticksLeft > 0 && perSecond > 0 ? existing.carry : 0;
+    this.list.push({ def, until: now + def.seconds, sourceId, perSecond, carry, ticksLeft: perSecond > 0 ? Math.round(def.seconds) : 0 });
   }
 
   has(id: string, now: number): boolean {
@@ -33,7 +35,7 @@ export class StatusList {
   }
 
   /** The sum of one numeric field over active statuses. */
-  sum(field: 'damageDealt' | 'damageTaken', now: number): number {
+  sum(field: 'damageDealt' | 'damageTaken' | 'reflect', now: number): number {
     let total = 0;
     for (const s of this.list) if (s.until > now) total += s.def[field] ?? 0;
     return total;

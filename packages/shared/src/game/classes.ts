@@ -1,6 +1,6 @@
 import { clamp } from '../math/scalar';
 import { TONIC, skill, type ClassSkillId, type SkillDef, type SkillEffect, type SkillId, type StatusDef } from './skills';
-import { attackFor, maxHpFor } from './stats';
+import { maxHpFor } from './stats';
 import { TALENTS } from './talents';
 
 /**
@@ -615,27 +615,33 @@ export const classArmor = (cls: ClassId, spec: SpecDef | null, talents: readonly
 export interface Loadout {
   readonly spec: SpecDef | null;
   readonly talents: readonly TalentDef[];
+  /** A worn legendary, when it belongs to the active spec. Its change and passive are in `kit` and `passive`. */
+  readonly legendary: (TalentDef & { readonly spec: SpecId }) | null;
   readonly kit: readonly SkillDef[];
   readonly passive: Passive;
 }
 
+/**
+ * Spec and talents at a level, plus a worn legendary when it belongs to the active spec: a
+ * legendary is applied exactly like one more talent, after the talents.
+ */
 export function loadout(
   cls: ClassId,
   choices: { readonly specs: Readonly<Partial<Record<ClassId, SpecId>>>; readonly talents: Readonly<Partial<Record<ClassId, TalentPicks>>> },
   level: number,
+  worn: (TalentDef & { readonly spec: SpecId }) | null = null,
 ): Loadout {
   const spec = activeSpec(cls, choices.specs, level);
   const talents = activeTalents(cls, choices.talents[cls], level);
-  return { spec, talents, kit: kitFor(cls, spec, talents), passive: passiveOf(spec, talents) };
+  const legendary = worn && spec && worn.spec === spec.id ? worn : null;
+  const all = legendary ? [...talents, legendary] : talents;
+  return { spec, talents, legendary, kit: kitFor(cls, spec, all), passive: passiveOf(spec, all) };
 }
 
 export const maxResourceFor = (cls: ClassId, level: number): number => {
   const r = CLASSES[cls].resource;
   return Math.round(r.base + r.perLevel * (level - 1));
 };
-
-/** Power: what every skill's numbers scale with. Today level and weapon tier; gear adds to it later. */
-export const powerFor = (level: number, weaponTier: number): number => attackFor(level, weaponTier);
 
 /** Clamps a summed modifier group to the shared caps. */
 export const capModifier = (sum: number): number => clamp(sum, -DAMAGE_REDUCTION_CAP, MODIFIER_CAP);

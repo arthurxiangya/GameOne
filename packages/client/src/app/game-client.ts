@@ -14,10 +14,9 @@ import {
   TONIC,
   coursePoints,
   generateWorld,
-  loadout,
+  heroStats,
   medalTimes,
   mountSpeed,
-  powerFor,
   zoneForBiome,
   type ChainId,
   type ClassId,
@@ -59,6 +58,7 @@ import { LocalPlayer } from '../state/local-player';
 import { ChatPanel } from '../ui/chat';
 import { ClassPanel } from '../ui/class-panel';
 import { DialogView } from '../ui/dialog';
+import { GearPanel } from '../ui/gear-panel';
 import { byId } from '../ui/dom';
 import { Hud } from '../ui/hud';
 import { JournalView } from '../ui/journal';
@@ -114,6 +114,7 @@ export class GameClient {
   private readonly journal: JournalView;
   private readonly stable: StableView;
   private readonly classPanel: ClassPanel;
+  private readonly gearPanel: GearPanel;
   private readonly boards = new LeaderboardView();
   private readonly modeBar: ModeBar;
   private readonly title: TitleScreen;
@@ -212,6 +213,7 @@ export class GameClient {
       choose: (cls, spec) => this.connection.send({ t: 'class', cls, spec }),
       talent: (row, pick) => this.connection.send({ t: 'talent', row, pick }),
     });
+    this.gearPanel = new GearPanel({ send: (op) => this.connection.send({ t: 'gear', op }) });
     this.journal = new JournalView({
       track: (id) => this.track(id),
       title: (id) => this.connection.send({ t: 'title', title: id }),
@@ -273,6 +275,7 @@ export class GameClient {
         case '4': this.useSlot(3); break;
         case 'q': this.useSkill(TONIC); break;
         case 'c': this.toggleClasses(); break;
+        case 'i': this.toggleGear(); break;
         case 'e': if (this.nearNpc) this.openNpc(this.nearNpc); break;
         case 'j': this.toggleJournal(); break;
         case 'p': this.toggleStable(); break;
@@ -301,6 +304,7 @@ export class GameClient {
     byId('journalBtn').addEventListener('click', () => this.toggleJournal());
     byId('stableBtn').addEventListener('click', () => this.toggleStable());
     byId('classBtn').addEventListener('click', () => this.toggleClasses());
+    byId('gearBtn').addEventListener('click', () => this.toggleGear());
     byId('rideBtn').addEventListener('click', () => this.toggleMount());
     byId('boardsBtn').addEventListener('click', () => this.toggleBoards());
     byId('questBox').addEventListener('click', () => this.toggleJournal());
@@ -473,9 +477,9 @@ export class GameClient {
   private onProgress(p: PlayerProgress): void {
     const before = this.progress;
     this.progress = p;
-    const gear = loadout(p.cls, p, p.level);
-    this.kit = gear.kit;
-    this.hud.setKit(p.cls, this.kit, powerFor(p.level, p.weapon), gear.passive);
+    const stats = heroStats(p, p.level);
+    this.kit = stats.loadout.kit;
+    this.hud.setKit(p.cls, this.kit, stats.power, stats.passive);
     if (before && before.cls !== p.cls) {
       this.cooldowns = {};
       this.playerClass = p.cls;
@@ -501,6 +505,7 @@ export class GameClient {
     this.journal.refresh(p, this.tracked, Date.now());
     this.stable.refresh(p);
     this.classPanel.refresh(p);
+    this.gearPanel.refresh(p);
   }
 
   private toggleClasses(): void {
@@ -510,7 +515,20 @@ export class GameClient {
       this.dialog.close();
       this.journal.close();
       this.stable.close();
+      this.gearPanel.close();
       this.classPanel.open(this.progress);
+    }
+  }
+
+  private toggleGear(): void {
+    if (this.phase !== 'playing' || !this.progress) return;
+    if (this.gearPanel.isOpen) this.gearPanel.close();
+    else {
+      this.dialog.close();
+      this.journal.close();
+      this.stable.close();
+      this.classPanel.close();
+      this.gearPanel.open(this.progress);
     }
   }
 
@@ -520,6 +538,8 @@ export class GameClient {
     else {
       this.dialog.close();
       this.journal.close();
+      this.classPanel.close();
+      this.gearPanel.close();
       this.stable.open(this.progress);
     }
   }
@@ -567,6 +587,8 @@ export class GameClient {
     else {
       this.dialog.close();
       this.stable.close();
+      this.classPanel.close();
+      this.gearPanel.close();
       this.journal.open(this.progress, this.tracked, Date.now());
     }
   }
@@ -733,6 +755,7 @@ export class GameClient {
 
   private chooseTopic(npc: NpcDef, action: TopicAction): void {
     if (action.send) this.connection.send({ t: 'npc', npc: npc.id, action: action.send.action, arg: action.send.arg });
+    if (action.open === 'gear') this.toggleGear();
   }
 
   private escape(): void {
@@ -742,6 +765,7 @@ export class GameClient {
     else if (this.journal.isOpen) this.journal.close();
     else if (this.stable.isOpen) this.stable.close();
     else if (this.classPanel.isOpen) this.classPanel.close();
+    else if (this.gearPanel.isOpen) this.gearPanel.close();
     else if (this.boards.isOpen) this.boards.close();
     else this.setTarget(null);
   }
@@ -907,6 +931,7 @@ export class GameClient {
     });
     const found = nearest as NpcDef | null;
     this.nearNpc = found;
+    this.gearPanel.setForge(found?.services.includes('forge') ?? false);
     const talk = byId('talkBtn');
     if (found && !this.dialog.isOpen) {
       const label = `Talk to ${found.name}`;

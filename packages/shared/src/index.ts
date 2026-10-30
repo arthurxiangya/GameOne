@@ -20,6 +20,8 @@ export * from './game/stats';
 export * from './game/skills';
 export * from './game/classes';
 export * from './game/talents';
+export * from './game/gear';
+export * from './game/hero';
 export * from './game/monsters';
 export * from './game/story';
 export * from './game/bounties';

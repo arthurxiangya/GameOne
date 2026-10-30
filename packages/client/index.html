@@ -91,6 +91,9 @@
       <button class="btn panel iconbtn" id="classBtn" type="button" aria-label="Class and skills (C)">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2 3 4v4c0 3 2.2 5.2 5 6 2.8-.8 5-3 5-6V4zM8 5.5v5M5.5 8h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg>
       </button>
+      <button class="btn panel iconbtn" id="gearBtn" type="button" aria-label="Gear and bag (I)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 5V4a2.5 2.5 0 0 1 5 0v1M3 5h10l-.8 8.5H3.8zM6 8.5h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg>
+      </button>
       <button class="btn panel iconbtn" id="rideBtn" type="button" aria-label="Ride your mount (R)">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 9.5h8l2.5-3.5 1.5.5-1 4.5h-1.5v2.5M4 9.5v3.5M9 9.5v3.5M6 9.5V7.5h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" /></svg>
       </button>
@@ -198,6 +201,15 @@
         </button>
       </div>
       <div class="j-body" id="sBody"></div>
+    </div>
+    <div class="hud game modal panel journal" id="gear" role="dialog" aria-labelledby="gTitle" hidden>
+      <div class="j-head">
+        <h2 id="gTitle">Gear &amp; bag</h2>
+        <button class="x" id="gClose" type="button" aria-label="Close the gear panel">
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
+        </button>
+      </div>
+      <div class="j-body" id="gBody"></div>
     </div>
     <div class="hud game modal panel journal" id="classes" role="dialog" aria-labelledby="cTitle" hidden>
       <div class="j-head">

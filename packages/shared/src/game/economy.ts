@@ -3,11 +3,9 @@ import type { PetId } from './pets';
 import type { TitleId } from './titles';
 
 export const TONIC_PRICE = 15;
-export const MAX_WEAPON_TIER = 5;
 export const STARTING_TONICS = 3;
-
-/** Gold needed to sharpen from `tier` to `tier + 1`. */
-export const sharpenCost = (tier: number): number => 40 * (tier + 1);
+/** Weapon tiers from before gear (sharpening at Oda's) went up to this. */
+export const LEGACY_MAX_WEAPON_TIER = 5;
 
 /** Health restored by a tonic at a given level. */
 export const tonicHeal = (level: number): number => 60 + 14 * level;
@@ -15,7 +13,7 @@ export const tonicHeal = (level: number): number => 60 + 14 * level;
 /** Chance a regular monster drops a tonic. */
 export const TONIC_DROP_CHANCE = 0.07;
 
-/** Things Smith Oda sells besides tonics and sharpening: for gold, or for Ember Marks. */
+/** Things Smith Oda sells besides tonics and weapons: for gold, or for Ember Marks. */
 export type ShopItemId =
   | 'tonicSatchel'
   | 'lanternbearer'

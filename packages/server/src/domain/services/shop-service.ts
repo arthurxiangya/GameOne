@@ -1,11 +1,11 @@
-import { MAX_WEAPON_TIER, SHOP_ITEMS, TONIC_PRICE, priceText, sharpenCost, type ShopItemId } from '@lanternwood/shared';
+import { SHOP_ITEMS, TONIC_PRICE, priceText, type ShopItemId } from '@lanternwood/shared';
 import type { Player } from '../entities/player';
 import type { EventSink } from '../events';
 import { fail, ok, type Result } from '../result';
 import type { PetService } from './pet-service';
 import type { ProgressionService } from './progression-service';
 
-/** Smith Oda's forge, and what she sells for gold and Ember Marks. */
+/** What Smith Oda sells for gold and Ember Marks. Her forge's gear work is in GearService. */
 export class ShopService {
   constructor(
     private readonly events: EventSink,
@@ -52,19 +52,6 @@ export class ShopService {
     p.tonics += 1;
     player.touchProgress();
     this.events.player(player.id, { e: 'log', text: 'Bought a healing tonic', c: 'loot' });
-    return ok();
-  }
-
-  sharpen(player: Player): Result {
-    const p = player.progress;
-    if (p.weapon >= MAX_WEAPON_TIER) return fail('Your blade is as sharp as it gets.');
-    const cost = sharpenCost(p.weapon);
-    if (p.gold < cost) return fail(`Sharpening costs ${cost} gold.`);
-    p.gold -= cost;
-    p.weapon += 1;
-    player.touchProgress();
-    this.events.player(player.id, { e: 'log', text: `Your blade is now +${p.weapon * 4} attack`, c: 'good' });
-    this.events.area(player.body.x, player.body.z, { e: 'cast', id: player.id });
     return ok();
   }
 }

@@ -11,8 +11,9 @@ A voxel MMORPG for the browser. An authoritative Node.js game server simulates a
 - **Rift Trials.** Up to four heroes step into Seer Ilka's stone circle and are taken to a floating rift island: five waves, then the Rift Lord, against the clock, scored on a leaderboard. Rift monsters fight only their own party.
 - **Duel Ring.** Challenge another hero to a 90-second, level-matched duel inside a ring. Nobody dies or loses anything; winners climb an Elo rating on the leaderboard.
 - **Ember Run.** A time trial through eight checkpoints in every land and back, on foot, judged by the server, with medals and a leaderboard (L).
+- **Gear.** Six slots (weapon, helm, chest, gloves, boots, charm), five rarities and four affix stats on one diminishing curve, so mixing beats stacking. Three four-piece sets and one legendary per specialization. Monsters drop gear now and then, bosses always do; Smith Oda upgrades, reforges and crafts for Embers salvaged from what you don't wear (I).
 - **Mounts and pets.** Five mounts (R to ride, up to 80% faster on land) and seven pets that hatch from eggs, level up with you and each give a small bonus (P for the stable).
-- **RPG systems.** Class skills and statuses (taunts, slows, stuns, burns, wards), tonics, critical hits, experience and levels up to 20, gold, weapon upgrades, Ember Marks and titles, and a journal (J) that tracks it all.
+- **RPG systems.** Class skills and statuses (taunts, slows, stuns, burns, wards), tonics, critical hits, experience and levels up to 20, gold, gear, Ember Marks and titles, and a journal (J) that tracks it all.
 - **Persistent heroes.** Progress is saved on the server and restored when you return in the same browser.
 - **Works on phones.** A touch joystick and skill wheel, tap-to-target, and a smaller draw distance on small screens.
 - **Single-player preview.** The same game server can run inside the page, so the game also plays with no server at all.
@@ -131,11 +132,12 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing code. It expla
 | Jump or swim up | Space | Jump button |
 | Talk to an NPC | E, or click them | Talk button, or tap them |
 | Class, skills, specialization and talents | C | Shield button |
+| Gear and bag (upgrade, reforge and craft at Smith Oda) | I | Bag button |
 | Chat | Enter | Speech bubble button |
 
 ## Testing
 
-`npm test` runs about 200 tests:
+`npm test` runs about 240 tests:
 
 - **Shared:** deterministic world generation, collision physics, protocol validation, game rules and chunk meshing.
 - **Server:** combat and every class mechanic, the balance test (every class, spec and talent played through the real server), stories and bounties, save migration, monster AI, the speed-hack guard, session handling (rate limits, duplicate logins, full server), persistence, and a real WebSocket end-to-end test with two players.

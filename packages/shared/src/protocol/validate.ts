@@ -3,10 +3,11 @@ import { isMountId } from '../game/mounts';
 import { isPetId } from '../game/pets';
 import { isNpcAction, isNpcId } from '../game/npcs';
 import { isClassId, isSkillId, specOf } from '../game/classes';
+import { BAG_SIZE, isAffixStat, isGearSlot } from '../game/gear';
 import { isChainId } from '../game/story';
 import { isTitleId, type TitleId } from '../game/titles';
 import { MAX_INPUT_FRAMES, TOKEN_PATTERN } from './limits';
-import type { ClientMessage, InputFrame } from './messages';
+import type { ClientMessage, GearOp, InputFrame } from './messages';
 import { sanitizeChat, sanitizeName } from './sanitize';
 
 export type ParseResult = { readonly ok: true; readonly msg: ClientMessage } | { readonly ok: false; readonly error: string };
@@ -26,6 +27,28 @@ function parseFrame(v: unknown): InputFrame | null {
   if (!isFiniteIn(fwd, -1.01, 1.01) || !isFiniteIn(strafe, -1.01, 1.01) || !isFiniteIn(yaw, -1e4, 1e4)) return null;
   if (typeof jump !== 'boolean' || typeof swim !== 'boolean') return null;
   return { seq, fwd, strafe, yaw, jump, swim };
+}
+
+function parseGearOp(v: unknown): GearOp | null {
+  if (!isRecord(v)) return null;
+  switch (v.kind) {
+    case 'equip':
+    case 'upgrade':
+      return isId(v.item) ? { kind: v.kind, item: v.item } : null;
+    case 'unequip':
+    case 'craft':
+      return isGearSlot(v.slot) ? { kind: v.kind, slot: v.slot } : null;
+    case 'salvage': {
+      const items = v.items;
+      if (!Array.isArray(items) || items.length === 0 || items.length > BAG_SIZE || !items.every(isId)) return null;
+      return { kind: 'salvage', items: [...new Set(items as number[])] };
+    }
+    case 'reforge':
+      if (!isId(v.item) || !Number.isInteger(v.affix) || (v.affix as number) < 0 || (v.affix as number) > 3 || !isAffixStat(v.stat)) return null;
+      return { kind: 'reforge', item: v.item, affix: v.affix as number, stat: v.stat };
+    default:
+      return null;
+  }
 }
 
 /**
@@ -79,6 +102,10 @@ export function parseClientMessage(data: unknown): ParseResult {
       if (!Number.isInteger(data.row) || (data.row as number) < 0 || (data.row as number) > 3) return fail('Unknown talent row');
       if (data.pick !== null && (!Number.isInteger(data.pick) || (data.pick as number) < 0 || (data.pick as number) > 2)) return fail('Unknown talent');
       return okMsg({ t: 'talent', row: data.row as number, pick: data.pick as number | null });
+    }
+    case 'gear': {
+      const op = parseGearOp(data.op);
+      return op ? okMsg({ t: 'gear', op }) : fail('Unknown gear action');
     }
     case 'title': {
       if (data.title !== null && !isTitleId(data.title)) return fail('Unknown title');

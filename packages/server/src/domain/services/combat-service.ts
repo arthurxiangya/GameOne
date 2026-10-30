@@ -1,4 +1,5 @@
 import {
+  BOSS_DROPS,
   BOLT_SPEED,
   CRIT_CHANCE,
   CRIT_MULTIPLIER,
@@ -25,6 +26,7 @@ import type { Player } from '../entities/player';
 import type { EventSink } from '../events';
 import type { Clock } from '../ports';
 import { fail, ok, type Result } from '../result';
+import type { GearService } from './gear-service';
 import type { ProgressionService } from './progression-service';
 
 /** What combat needs to know about the world. Implemented by the application layer. */
@@ -60,6 +62,8 @@ const AREA_VERTICAL = 3;
 const HERO_RADIUS = 0.3;
 /** A guard talent works below this share of health. */
 const GUARD_BELOW = 0.35;
+/** Heroes this close to a boss when it falls each get its drop. */
+const BOSS_LOOT_RANGE = 30;
 
 /**
  * Skills, damage, healing, statuses, deaths and kill rewards. Every class skill runs through
@@ -75,6 +79,7 @@ export class CombatService {
     private readonly events: EventSink,
     private readonly progression: ProgressionService,
     private readonly achievements: AchievementSink,
+    private readonly gear: GearService,
   ) {}
 
   useSkill(player: Player, id: SkillId, requestedTarget: number | null): Result {
@@ -88,21 +93,45 @@ export class CombatService {
     if (blocked) return fail(blocked);
     player.dismount();
     if (def === TONIC) return this.tonic(player);
+    let result: Result;
     switch (def.target) {
       case 'enemy':
-        return this.castAtEnemy(player, def, requestedTarget);
+        result = this.castAtEnemy(player, def, requestedTarget);
+        break;
       case 'ally':
-        return this.castAtAlly(player, def, requestedTarget);
+        result = this.castAtAlly(player, def, requestedTarget);
+        break;
       case 'self':
         this.pay(player, def);
         this.events.area(player.body.x, player.body.z, { e: 'cast', id: player.id });
         this.resolve(player, def, [], [player]);
-        return ok();
+        result = ok();
+        break;
       case 'around':
         this.pay(player, def);
         this.events.area(player.body.x, player.body.z, { e: 'ring', id: player.id, r: def.radius, c: def.color });
         this.resolve(player, def, this.foesAround(player, def.radius), this.alliesAround(player, def.radius));
-        return ok();
+        result = ok();
+        break;
+    }
+    if (result.ok) this.afterCast(player, def, requestedTarget);
+    return result;
+  }
+
+  /** Gear that answers a cast: a legendary's echo, and a set's status on the fourth skill. */
+  private afterCast(player: Player, def: SkillDef, target: number | null): void {
+    const echo = player.legendary?.echo;
+    if (echo && def.id === echo.skill) {
+      player.echoCount += 1;
+      const free = player.echoCount % echo.every === 0 ? player.kit.find((s) => s.id === echo.cast) : undefined;
+      if (free && this.castAtEnemy(player, free, target, true).ok) {
+        this.events.area(player.body.x, player.body.z, { e: 'fx', id: player.id, text: free.name, good: true });
+      }
+    }
+    for (const proc of player.procs) {
+      if (proc.kind === 'signatureStatus' && def.id === player.kit[3]?.id) {
+        for (const ally of this.alliesAround(player, proc.radius)) this.bless(player, ally, proc.status);
+      }
     }
   }
 
@@ -175,6 +204,9 @@ export class CombatService {
   damagePlayer(player: Player, amount: number, source: Monster, kind: 'hit' | 'slam'): void {
     if (player.dead) return;
     const amt = this.absorb(player, Math.max(1, Math.round(this.mitigate(player, amount))));
+    // Frost Heart Aegis: a share of the blow (after armour) goes back to the attacker.
+    const reflect = player.statuses.sum('reflect', this.clock.now());
+    if (reflect > 0 && source.alive) this.damageMonster(source, amount * (1 - player.armor) * reflect, false, player);
     player.lastHurtAt = this.clock.now();
     player.dismount();
     this.gainOnHitTaken(player);
@@ -189,11 +221,29 @@ export class CombatService {
       this.events.area(player.body.x, player.body.z, { e: 'die', id: player.id });
       this.events.player(player.id, { e: 'log', text: 'You were defeated.', c: 'foe' });
     }
+    this.lowHealthWard(player);
+  }
+
+  /** Frostward: dropping low shields the hero, once in a while. */
+  private lowHealthWard(player: Player): void {
+    if (player.dead) return;
+    const now = this.clock.now();
+    for (const proc of player.procs) {
+      if (proc.kind !== 'lowHealthShield' || now < player.wardReadyAt || player.hp >= player.maxHp * proc.below) continue;
+      player.wardReadyAt = now + proc.every;
+      const amount = Math.round(player.attack * proc.k);
+      if (amount > player.shield || now >= player.shieldUntil) {
+        player.shield = amount;
+        player.shieldUntil = now + proc.seconds;
+      }
+      this.events.area(player.body.x, player.body.z, { e: 'fx', id: player.id, text: `Frostward ${amount}`, good: true });
+    }
   }
 
   // ------------------------------------------------------------------ casting
 
-  private castAtEnemy(player: Player, def: SkillDef, requested: number | null): Result {
+  /** `free`: an echo from gear, which costs nothing and starts no cooldown. */
+  private castAtEnemy(player: Player, def: SkillDef, requested: number | null, free = false): Result {
     const opponent = this.world.duelOpponent(player);
     let foe: Foe;
     if (opponent) {
@@ -210,7 +260,8 @@ export class CombatService {
     const at = foe.kind === 'monster' ? foe.m : { x: foe.p.body.x, z: foe.p.body.z };
     player.yaw = Math.atan2(at.x - player.body.x, at.z - player.body.z);
     this.events.player(player.id, { e: 'target', id: foe.kind === 'monster' ? foe.m.id : foe.p.id });
-    this.pay(player, def);
+    if (free) player.lastAttackAt = this.clock.now();
+    else this.pay(player, def);
     const targetId = foe.kind === 'monster' ? foe.m.id : foe.p.id;
     if (def.delivery === 'projectile') {
       const flight = Math.hypot(at.x - player.body.x, at.z - player.body.z) / BOLT_SPEED;
@@ -251,9 +302,10 @@ export class CombatService {
     for (const effect of def.effects) {
       switch (effect.kind) {
         case 'damage':
-          // An enemy skill's first foe is its target; the rest take the splash share.
+          // An enemy skill's first foe is its target; the rest take the splash share (none at all for 0).
           foes.forEach((foe, i) => {
-            dealt += this.hit(caster, def, foe, effect.k * (def.target === 'enemy' && i > 0 ? def.splash : 1), multi);
+            const share = def.target === 'enemy' && i > 0 ? def.splash : 1;
+            if (share > 0) dealt += this.hit(caster, def, foe, effect.k * share, multi);
           });
           break;
         case 'heal':
@@ -287,16 +339,16 @@ export class CombatService {
   }
 
   /** A status on an enemy: slows, stuns and burns on monsters; only damage-taken and burns reach duelists. */
-  private afflict(caster: Player, foe: Foe, status: StatusDef): void {
+  private afflict(caster: Player, foe: Foe, status: StatusDef, quiet = false): void {
     const now = this.clock.now();
     const perSecond = status.dot ? (caster.attack * status.dot * (1 + this.damageBonus(caster, foe, false))) / status.seconds : 0;
     if (foe.kind === 'monster') {
       if (!foe.m.alive || (status.stun && foe.m.def.boss)) return;
       foe.m.statuses.apply(status, now, caster.id, perSecond);
-      this.events.area(foe.m.x, foe.m.z, { e: 'fx', id: foe.m.id, text: status.name, good: false });
+      if (!quiet) this.events.area(foe.m.x, foe.m.z, { e: 'fx', id: foe.m.id, text: status.name, good: false });
     } else {
       foe.p.statuses.apply(status, now, caster.id, perSecond);
-      this.events.area(foe.p.body.x, foe.p.body.z, { e: 'fx', id: foe.p.id, text: status.name, good: false });
+      if (!quiet) this.events.area(foe.p.body.x, foe.p.body.z, { e: 'fx', id: foe.p.id, text: status.name, good: false });
     }
   }
 
@@ -311,13 +363,17 @@ export class CombatService {
     const crit = this.rng.next() < CRIT_CHANCE + (caster.passive.crit ?? 0) + def.crit;
     const spread = 0.9 + this.rng.next() * 0.2;
     const amount = caster.attack * k * spread * (crit ? CRIT_MULTIPLIER : 1) * (1 + this.damageBonus(caster, foe, multi));
+    let landed: number;
     if (foe.kind === 'hero') {
       this.hitDuelist(caster, foe.p, amount, crit);
-      return amount * DUEL.damageScale;
+      landed = amount * DUEL.damageScale;
+    } else {
+      if (!foe.m.alive) return 0;
+      landed = amount * (1 + capModifier(foe.m.statuses.sum('damageTaken', this.clock.now())));
+      this.damageMonster(foe.m, landed, crit, caster);
     }
-    if (!foe.m.alive) return 0;
-    const landed = amount * (1 + capModifier(foe.m.statuses.sum('damageTaken', this.clock.now())));
-    this.damageMonster(foe.m, landed, crit, caster);
+    // Emberfall: critical hits leave a burn.
+    if (crit) for (const proc of caster.procs) if (proc.kind === 'critStatus') this.afflict(caster, foe, proc.status, true);
     return landed;
   }
 
@@ -345,6 +401,7 @@ export class CombatService {
       this.world.duelDown(attacker, target);
     } else {
       target.hp -= amt;
+      this.lowHealthWard(target);
     }
   }
 
@@ -392,6 +449,12 @@ export class CombatService {
   }
 
   private killMonster(monster: Monster, killer: Player | null): void {
+    const boss = monster.def.boss ? BOSS_DROPS[monster.type as keyof typeof BOSS_DROPS] : undefined;
+    if (boss) {
+      for (const p of this.world.playersNear(monster.x, monster.z, BOSS_LOOT_RANGE)) {
+        if (!p.dead && sameFight(monster, p.party) && Math.hypot(p.body.x - monster.x, p.body.z - monster.z) <= BOSS_LOOT_RANGE) this.gear.bossKill(p, boss, monster.level);
+      }
+    }
     monster.die();
     this.events.area(monster.x, monster.z, { e: 'die', id: monster.id });
     if (!killer) return;
@@ -404,6 +467,7 @@ export class CombatService {
     const onKill = killer.passive.onKill ?? 0;
     if (onKill > 0 && !killer.dead) this.heal(killer, killer.maxHp * onKill);
     this.achievements.record(killer, { kind: 'kill', monster: monster.type, level: monster.level });
+    if (!monster.def.boss) this.gear.monsterKill(killer, monster.level);
     if (!monster.def.boss && this.rng.next() < TONIC_DROP_CHANCE * (1 + activePetBonus(killer.progress, 'tonicDrops'))) {
       killer.progress.tonics += 1;
       killer.touchProgress();

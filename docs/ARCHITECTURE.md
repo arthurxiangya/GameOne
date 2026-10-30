@@ -179,7 +179,16 @@ Classes are data in `shared/src/game/classes.ts`. Each one has a health multipli
 - **One engine.** `CombatService` runs every skill the same way: check, pay, choose who it reaches, apply its effects in order.
 - **Statuses** (`domain/statuses.ts`) sit on heroes and monsters. Monster AI honours slows, stuns and taunts.
 - **Specs** are a passive plus a patch over the class's skills. **Talents** (`shared/src/game/talents.ts`) are passives and composable changes: multipliers, deltas and appended effects. `loadout()` resolves class, spec and talents into the kit and passive, on the client and the server alike (ADR 0014).
-- **Balance is a test.** `server/test/balance.test.ts` plays every class and spec through the real `GameWorld` and fails if a build leaves its bands (ADR 0013). It also measures every talent six ways: alone, in packs, surviving, in a real fight, and with a partner. It fails on talents that creep, do nothing, or leave a row with a trap or a must-pick (ADR 0014).
+- **Balance is a test.** `server/test/balance.test.ts` plays every class and spec through the real `GameWorld` and fails if a build leaves its bands (ADR 0013). It also measures every talent six ways: alone, in packs, surviving, in a real fight, and with a partner. It fails on talents that creep, do nothing, or leave a row with a trap or a must-pick (ADR 0014). The shared helpers live in `balance-harness.ts`.
+
+### Gear
+
+Gear is data in `shared/src/game/gear.ts`: six slots, five rarities, four affix stats on one curve (cap × R ÷ (R + 60)), three sets and one legendary per spec. `heroStats()` in `shared/src/game/hero.ts` puts class, spec, talents and gear together into Power, health, armour and one passive. The server's `Player` and the client's panels both call it.
+
+- **Items never change in place.** Upgrades and reforges replace the item, and equipping replaces the `gear` record. `Player` memoizes its stats by reference and recomputes them exactly when something changes.
+- **Sets and legendaries reuse the class engine.** Two-piece bonuses are passives. A legendary is a talent carried by an item, applied after the talents for its own spec. Three four-piece hooks (`GearProc`) and two legendary hooks (`reflect`, `echo`) are the only new combat code.
+- **`GearService`** (domain) rolls drops on its own random stream and runs the bag and Smith Oda's forge. Bosses drop for every hero nearby.
+- **Gear bands** in `server/test/gear-balance.test.ts` hold affixes to about a third of output with mixing ahead of stacking, sets to a different build rather than a better one, and legendaries to the talent caps (ADR 0015).
 
 ### Game modes
 
@@ -262,10 +271,10 @@ The current design targets one process with up to a few hundred players. The por
 | Level | Where | Examples |
 | --- | --- | --- |
 | Unit | `packages/*/test` | Physics collisions, protocol validation, token bucket, spatial hash, snapshot interpolation |
-| Domain / application | `server/test/combat`, `game-world`, `session-service` | Every class mechanic (taunt, wards, slows, stuns, burns, buffs), class changes, the balance bands for every build, story chains end to end, daily bounties, save migration, each mode end to end on a fake clock (a race, a night won and lost, a full rift run, duels), mounts and pets, monster leashing, speed-hack guard, duplicate login, full server |
+| Domain / application | `server/test/combat`, `game-world`, `session-service`, `gear` | Every class mechanic (taunt, wards, slows, stuns, burns, buffs), class changes, the balance bands for every build, talent and gear item, drops, the forge and save migration of old weapon tiers, story chains end to end, daily bounties, save migration, each mode end to end on a fake clock (a race, a night won and lost, a full rift run, duels), mounts and pets, monster leashing, speed-hack guard, duplicate login, full server |
 | Integration | `server/test/infrastructure` | Atomic JSON saves, config validation |
 | End to end | `server/test/e2e`, `client/test/offline` | Real HTTP and WebSocket server; two clients join, see each other move, and chat; two clients fight a duel to a rating change; path traversal blocked; single-player through the in-page server |
-| Browser (CI) | `scripts/browser-smoke.mjs` | Headless Chromium with WebGL: two players in the online build see each other move and chat; the preview bundle renders and plays, opens the journal, the stable and the class panel, and starts and gives up an Ember Run |
+| Browser (CI) | `scripts/browser-smoke.mjs` | Headless Chromium with WebGL: two players in the online build see each other move and chat; the preview bundle renders and plays, opens the journal, the stable, the class panel and the gear panel, and starts and gives up an Ember Run |
 | Container (CI) | `.github/workflows/ci.yml` | Docker image builds, starts, answers `/healthz` and serves the client |
 
 ## 14. Deployment
