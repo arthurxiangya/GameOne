@@ -42,7 +42,7 @@ flowchart TD
 
 | Package | Depends on | Runs in | Contains |
 | --- | --- | --- | --- |
-| `shared` | nothing | Node and browser | Seeded noise and RNG, voxel world and generator, chunk mesher, player physics, stats, skills, monsters, story scripts, bounties and economy data, protocol types, validation and sanitisers |
+| `shared` | nothing | Node and browser | Seeded noise and RNG, voxel world and generator, chunk mesher, player physics, stats, classes and skills, monsters, story scripts, bounties and economy data, protocol types, validation and sanitisers |
 | `server` | `shared`, `ws` | Node | The authoritative game server |
 | `client` | `shared`, `three`, `server/embedded` | Browser | Rendering, input, prediction, interpolation, HUD, transports |
 
@@ -171,6 +171,16 @@ Skills, NPC actions, chat and respawn are discrete commands. The client shows co
 
 The world is never sent. The server sends only its seed, and the client runs the same `generateWorld(seed)`, which takes about 0.2 s. Chunks are meshed a few per frame with face culling and per-vertex ambient occlusion.
 
+### Classes and skills
+
+Classes are data in `shared/src/game/classes.ts`. Each one has a health multiplier, armour, a threat multiplier, a resource, four skills, two specializations and a rotation.
+
+- **Skills** are lists of effects (`damage`, `heal`, `shield`, `status`, `taunt`) plus a targeting mode, delivery, range and radius.
+- **One engine.** `CombatService` runs every skill the same way: check, pay, choose who it reaches, apply its effects in order.
+- **Statuses** (`domain/statuses.ts`) sit on heroes and monsters. Monster AI honours slows, stuns and taunts.
+- **Specs** are a passive plus a patch over the class's skills. `kitFor(class, spec)` resolves both, on the client and the server alike.
+- **Balance is a test.** `server/test/balance.test.ts` plays every class and spec through the real `GameWorld` and fails if a build leaves its bands (ADR 0013).
+
 ### Game modes
 
 Four modes live in `server/src/application/modes/`: `EmberRun`, `LanternNight`, `RiftTrials` and `Duels`. Each implements `GameMode`: a `step` each tick, the hero's `status` for their HUD, and optional rule hooks (`skillBlocked`, `mountBlocked`, `ignoredByMonsters`, `frozen`, `onPlayerFell`, `onPlayerRemoved`). A mode changes the world only through `ModeHost` (teleport, rewards, achievements, leaderboards). Combat, monster AI and mounts ask the world for those rules instead of knowing about any mode (ADR 0011). Two rules reach into the domain without naming a mode: rift monsters carry their party and fight only it (`sameFight`), and a hero can hit another hero only while `CombatWorld.duelOpponent` says they are duelling (ADR 0012). Results go to `Leaderboards`, which keeps the boards in memory and writes them through a `LeaderboardRepository` (a JSON file online, localStorage in single-player).
@@ -252,10 +262,10 @@ The current design targets one process with up to a few hundred players. The por
 | Level | Where | Examples |
 | --- | --- | --- |
 | Unit | `packages/*/test` | Physics collisions, protocol validation, token bucket, spatial hash, snapshot interpolation |
-| Domain / application | `server/test/combat`, `game-world`, `session-service` | Story chains end to end, daily bounties, save migration, each mode end to end on a fake clock (a race, a night won and lost, a full rift run, duels), mounts and pets, monster leashing, speed-hack guard, duplicate login, full server |
+| Domain / application | `server/test/combat`, `game-world`, `session-service` | Every class mechanic (taunt, wards, slows, stuns, burns, buffs), class changes, the balance bands for every build, story chains end to end, daily bounties, save migration, each mode end to end on a fake clock (a race, a night won and lost, a full rift run, duels), mounts and pets, monster leashing, speed-hack guard, duplicate login, full server |
 | Integration | `server/test/infrastructure` | Atomic JSON saves, config validation |
 | End to end | `server/test/e2e`, `client/test/offline` | Real HTTP and WebSocket server; two clients join, see each other move, and chat; two clients fight a duel to a rating change; path traversal blocked; single-player through the in-page server |
-| Browser (CI) | `scripts/browser-smoke.mjs` | Headless Chromium with WebGL: two players in the online build see each other move and chat; the preview bundle renders and plays, opens the journal and the stable, and starts and gives up an Ember Run |
+| Browser (CI) | `scripts/browser-smoke.mjs` | Headless Chromium with WebGL: two players in the online build see each other move and chat; the preview bundle renders and plays, opens the journal, the stable and the class panel, and starts and gives up an Ember Run |
 | Container (CI) | `.github/workflows/ci.yml` | Docker image builds, starts, answers `/healthz` and serves the client |
 
 ## 14. Deployment

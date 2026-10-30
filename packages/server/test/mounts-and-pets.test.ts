@@ -57,7 +57,8 @@ describe('mounts', () => {
     hero.progress.mounts.push('strider');
     hero.progress.mount = 'strider';
     ride(world, hero);
-    assert.ok(world.execute(hero.id, { kind: 'skill', skill: 'ring', target: null }).ok);
+    hero.mp = 100;
+    assert.ok(world.execute(hero.id, { kind: 'skill', skill: 'inferno', target: null }).ok);
     assert.equal(hero.riding, null, 'using a skill dismounts');
     assert.equal(world.execute(hero.id, { kind: 'mount', on: true }).ok, false, 'just attacked');
     hero.lastAttackAt = -100;
@@ -106,8 +107,8 @@ describe('pets', () => {
       if (!m.alive) m.respawn(m.y);
       standNextTo(hero, m);
       m.hp = 1;
-      hero.cooldowns.strike = 0;
-      world.execute(hero.id, { kind: 'skill', skill: 'strike', target: m.id });
+      hero.cooldowns.clear();
+      world.execute(hero.id, { kind: 'skill', skill: 'slash', target: m.id });
     }
     assert.deepEqual(hero.progress.eggs, []);
     assert.equal(hero.progress.pet, 'fox');
@@ -123,14 +124,14 @@ describe('pets', () => {
     const m = monsterOf(world, 'boar');
     standNextTo(hero, m);
     m.hp = 1;
-    world.execute(hero.id, { kind: 'skill', skill: 'strike', target: m.id });
+    world.execute(hero.id, { kind: 'skill', skill: 'slash', target: m.id });
     assert.ok(hero.progress.pets[0]!.xp > 0);
     hero.progress.pets[0]!.xp = petXpToNext(1) - 1;
     const m2 = monsterOf(world, 'boar', 1);
     standNextTo(hero, m2);
     m2.hp = 1;
-    hero.cooldowns.strike = 0;
-    world.execute(hero.id, { kind: 'skill', skill: 'strike', target: m2.id });
+    hero.cooldowns.clear();
+    world.execute(hero.id, { kind: 'skill', skill: 'slash', target: m2.id });
     assert.equal(hero.progress.pets[0]!.level, 2);
     assert.ok(Math.abs(petBonusAt('moth', 10, 'xp') - 0.1) < 1e-9);
     assert.ok(Math.abs(petBonusAt('moth', 1, 'xp') - 0.01) < 1e-9);

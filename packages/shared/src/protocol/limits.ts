@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 
 /** Largest client message the server will parse. */
 export const MAX_CLIENT_MESSAGE_BYTES = 8 * 1024;

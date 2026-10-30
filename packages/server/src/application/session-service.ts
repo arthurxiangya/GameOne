@@ -210,6 +210,9 @@ export class SessionService {
       case 'npc':
         world.execute(player.id, { kind: 'npc', npc: msg.npc, action: msg.action, arg: msg.arg });
         return;
+      case 'class':
+        world.execute(player.id, { kind: 'class', cls: msg.cls, spec: msg.spec });
+        return;
       case 'title':
         world.execute(player.id, { kind: 'title', title: msg.title });
         return;
@@ -275,7 +278,8 @@ export class SessionService {
     }
 
     const now = this.deps.time.iso();
-    const record: PlayerRecord = stored ? { ...stored, name: msg.name, updatedAt: now } : newPlayerRecord(accountId, msg.name, now);
+    // Heroes always enter at the fountain, where changing class is allowed, so the title screen's choice applies.
+    const record: PlayerRecord = stored ? { ...stored, name: msg.name, cls: msg.cls, updatedAt: now } : { ...newPlayerRecord(accountId, msg.name, now), cls: msg.cls };
     const player = this.deps.world.spawnPlayer(accountId, lookForAccount(accountId), progressFromRecord(record));
     session.player = player;
     session.record = record;

@@ -1,4 +1,4 @@
-# Wire protocol (v8)
+# Wire protocol (v9)
 
 All messages are JSON text frames on `ws(s)://<host>/ws`, discriminated by the `t` field. Types live in [`packages/shared/src/protocol/messages.ts`](../packages/shared/src/protocol/messages.ts). Client messages are validated by `parseClientMessage`; anything else is rejected with an `error`. Field names are short because snapshots go out twenty times a second.
 
@@ -6,13 +6,13 @@ All messages are JSON text frames on `ws(s)://<host>/ws`, discriminated by the `
 
 ```
 client                                   server
-  | --- hello {v, token, name} ----------> |
+  | --- hello {v, token, name, cls} -----> |
   | <-- welcome {you, seed, progress, …} - |   (or reject {reason} + close)
   | --- input / skill / npc / chat … ----> |
   | <-- snapshot (20/s), progress, chat -- |
 ```
 
-`token` is a 64-hex-character secret the browser generates once and keeps in `localStorage`. The server stores only its salted hash.
+`token` is a 64-hex-character secret the browser generates once and keeps in `localStorage`. The server stores only its salted hash. `cls` is the class picked on the title screen (`warden`, `lightkeeper`, `ranger`, `emberblade` or `chimer`); heroes always enter at the fountain, where class changes are allowed, so it applies on entry.
 
 ## Client → server
 
@@ -20,7 +20,8 @@ client                                   server
 | --- | --- | --- |
 | `hello` | `v`, `token`, `name` | `v` must equal `PROTOCOL_VERSION`. The name is sanitised to 2–14 letters, numbers, spaces and `_ ' . -`. |
 | `input` | `frames: InputFrame[]` (1–10) | Each frame is one `SIM_DT` step: `{seq, fwd, strafe, yaw, jump, swim}`. `fwd` and `strafe` are in [-1, 1], relative to the camera `yaw`. |
-| `skill` | `skill`, `target` | `skill` is one of `strike`, `bolt`, `mend`, `ring`, `tonic`. `target` is an entity id or `null` (the server picks the nearest monster in front). |
+| `skill` | `skill`, `target` | `skill` is one of your class's four skills or `tonic` (see `kitFor` in `shared`); anything else is refused. `target` is an entity id or `null`: enemy skills use a monster (or your duel opponent), and fall back to the nearest monster in front; ally skills (Mend, Lantern Ward) use the hero you target, or yourself. |
+| `class` | `cls`, `spec` | Change class (in Emberhold, out of combat) and choose a specialization of that class, or `null` (level 10 and up, out of combat, outside a mode). Free. |
 | `npc` | `npc`, `action`, `arg` | You must stand within 4.5 blocks of the character. `greet` opens a conversation (it counts for bounties). `accept`, `turnIn` and `talk` take a story chain id in `arg` (`main`, `bell`, `thief`, `rift`); the server checks that this character gives, takes back or is the subject of that step. `buyTonic` and `sharpen` need a character with the forge (Oda); `buy` needs one who trades and takes an item id in `arg` (see `SHOP_ITEMS`). `race` starts an Ember Run at Pip the Runner. `rift` asks Seer Ilka to open a rift (level 6 and up). `arg` is `null` otherwise. |
 | `title` | `title` | Show one of your earned titles under your name, or `null` for none. |
 | `mount` | `on` | `true` calls your chosen mount (1.5 s; not within 5 s of combat), `false` gets off. Using a skill or taking damage also puts you on foot. |
@@ -53,9 +54,9 @@ client                                   server
 
 - `st` — server simulation time in seconds, used for interpolation.
 - `ack` — the highest input `seq` the server has applied. Replay any later frames on top of `you`.
-- `you` — your full-precision physics body plus `hp`, `mhp`, `mp`, `mmp`, `dead`, `cd` (remaining cooldown per skill), `mt` (the mount you ride, or `null`) and `call` (seconds left calling a mount). Predict movement with `stepPlayer(..., mountSpeed(mt))`.
+- `you` — your full-precision physics body plus `hp`, `mhp`, `mp` and `mmp` (your class resource: Resolve, Mana, Focus or Heat), `dead`, `cd` (seconds left per skill on cooldown; missing means ready), `st` (your statuses: `{id, name, left, good}`), `sh` (what your ward still absorbs), `mt` (the mount you ride, or `null`) and `call` (seconds left calling a mount). Predict movement with `stepPlayer(..., mountSpeed(mt))`.
 - `ents` — delta-encoded entities within the interest radius. The first time an entity is sent to you it arrives in full:
-  - Player: `{k:'p', id, x, y, z, yaw, hp, mhp, lv, nm, look, dead, ti, mt, pet}` where `ti` is the title shown under the name, `mt` the mount being ridden and `pet` the pet following them (each `null` if none). Clients draw the pet trailing its hero; the server never simulates it.
+  - Player: `{k:'p', id, x, y, z, yaw, hp, mhp, lv, nm, look, dead, ti, mt, pet, cl}` where `cl` is the hero's class, `ti` is the title shown under the name, `mt` the mount being ridden and `pet` the pet following them (each `null` if none). Clients draw the pet trailing its hero; the server never simulates it.
   - Monster: `{k:'m', id, x, y, z, yaw, hp, mhp, lv, ty, sc, st}` where `st` is `idle`, `move`, `attack` or `dead`. `ty` includes the Gloom (`wisp`, `shade`, `gloomknight`), which only appear on Lantern Night and are removed after their death animation.
 
   After that, only `id` plus the fields that changed since your previous snapshot are sent (for example `{id: 12, x: 4.31, z: -7.02}`). An entity that changed nothing is left out entirely. Apply patches on top of the known state (`applyEntityUpdates` in `shared`).
@@ -69,8 +70,9 @@ client                                   server
 | `die` | `id` | Entity died |
 | `lvl` | `id`, `lv` | Player levelled up |
 | `swing` / `cast` | `id` | Attack animations |
-| `bolt` | `from`, `to`, `flight` | Ember Bolt in flight; damage arrives after `flight` seconds |
-| `ring` | `id`, `r` | Flame Ring around a player |
+| `bolt` | `from`, `to`, `flight`, `c` | A projectile skill in flight, in colour `c`; its effects land after `flight` seconds |
+| `ring` | `id`, `r`, `c` | An area skill of radius `r` around a player |
+| `fx` | `id`, `text`, `good` | A status landed (Slowed, Rallying Peal) or a ward went up: a floating label |
 | `slamWarn` | `x`, `y`, `z`, `r`, `delay` | Boss slam incoming: leave the circle |
 | `slam` | `x`, `y`, `z`, `r` | Boss slam landed |
 | `xp` | `amt` | You gained experience (private) |
@@ -106,3 +108,4 @@ Any incompatible change bumps `PROTOCOL_VERSION`. Older clients are rejected at 
 | 6 | Lantern Night: `siege` broadcast, Gloom monster types, story `event` objectives |
 | 7 | Rift Trials: `npc` action `rift`, `rift` mode state, the `riftlord` monster |
 | 8 | Duel Ring: `duel` message, `duel` mode state, player-versus-player hits in duels |
+| 9 | Classes: `cls` in `hello`, `class` message, class skill ids, `st` and `sh` in `you`, `cl` on players, colours on `bolt` and `ring`, `fx` event |

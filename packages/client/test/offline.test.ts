@@ -55,7 +55,7 @@ describe('single-player mode', () => {
       ...inbox.handlers,
       open: () => {
         opened = true;
-        transport.send({ t: 'hello', v: PROTOCOL_VERSION, token, name: 'Solo' });
+        transport.send({ t: 'hello', v: PROTOCOL_VERSION, token, name: 'Solo', cls: 'lightkeeper' });
       },
     });
     try {
@@ -87,7 +87,7 @@ describe('single-player mode', () => {
     const inbox = collect();
     const transport = new LoopbackTransport(() => server, {
       ...inbox.handlers,
-      open: () => transport.send({ t: 'hello', v: PROTOCOL_VERSION + 99, token, name: 'Old Page' }),
+      open: () => transport.send({ t: 'hello', v: PROTOCOL_VERSION + 99, token, name: 'Old Page', cls: 'warden' }),
     });
     transport.open();
     await inbox.waitFor((m): m is Extract<ServerMessage, { t: 'reject' }> => m.t === 'reject');

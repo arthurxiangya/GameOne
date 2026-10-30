@@ -1,4 +1,5 @@
 import {
+  CLASSES,
   LANTERN_POSITION,
   MONSTERS,
   MOUNTS,
@@ -7,16 +8,21 @@ import {
   PHYSICS,
   PROTOCOL_VERSION,
   RIFT,
+  RESOURCES,
   SIM_DT,
-  SKILLS,
-  SKILL_IDS,
   TITLES,
+  TONIC,
+  activeSpec,
   coursePoints,
   generateWorld,
+  kitFor,
   medalTimes,
   mountSpeed,
+  passiveOf,
+  powerFor,
   zoneForBiome,
   type ChainId,
+  type ClassId,
   type EntityState,
   type GameEvent,
   type GeneratedWorld,
@@ -29,6 +35,7 @@ import {
   type PlayerProgress,
   type SelfState,
   type ServerMessage,
+  type SkillDef,
   type SkillId,
   type SnapshotMessage,
   type Vec3,
@@ -52,6 +59,7 @@ import { ClockSync } from '../state/clock-sync';
 import { EntityStore, type RemoteEntity } from '../state/entity-store';
 import { LocalPlayer } from '../state/local-player';
 import { ChatPanel } from '../ui/chat';
+import { ClassPanel } from '../ui/class-panel';
 import { DialogView } from '../ui/dialog';
 import { byId } from '../ui/dom';
 import { Hud } from '../ui/hud';
@@ -65,7 +73,7 @@ import { Overlay } from '../ui/overlay';
 import { bindSkillBar } from '../ui/skill-bar';
 import { TitleScreen } from '../ui/title-screen';
 import { npcMark, npcTopics, type TopicAction } from './conversations';
-import { loadIdentity, rememberName, type Identity } from './identity';
+import { loadClass, loadIdentity, rememberClass, rememberName, type Identity } from './identity';
 import { defaultTracked, objectiveSpot, stillTrackable, trackerInfo } from './objectives';
 
 export interface GameClientOptions {
@@ -82,9 +90,6 @@ const DEFAULT_SEED = 2026;
 const MAX_STEPS_PER_FRAME = 5;
 const DRAW_DISTANCE_TITLE: [number, number] = [160, 320];
 const PING_INTERVAL = 3;
-
-const zeroCooldowns = (): Record<SkillId, number> =>
-  Object.fromEntries(SKILL_IDS.map((id) => [id, 0])) as Record<SkillId, number>;
 
 /**
  * Application controller. Owns the title → connecting → playing state machine, runs the
@@ -110,6 +115,7 @@ export class GameClient {
   private readonly dialog = new DialogView();
   private readonly journal: JournalView;
   private readonly stable: StableView;
+  private readonly classPanel: ClassPanel;
   private readonly boards = new LeaderboardView();
   private readonly modeBar: ModeBar;
   private readonly title: TitleScreen;
@@ -135,7 +141,13 @@ export class GameClient {
   private progress: PlayerProgress | null = null;
   private self: SelfState | null = null;
   private haveSnapshot = false;
-  private cooldowns = zeroCooldowns();
+  /** Seconds left per skill, counted down locally between snapshots. */
+  private cooldowns: Partial<Record<SkillId, number>> = {};
+  /** The four class skills on the bar, from progress (class, spec and level). */
+  private kit: readonly SkillDef[] = [];
+  /** The class chosen on the title screen. */
+  private playerClass: ClassId = loadClass();
+  private selfLook = 0;
   private timeOfDay = 0.33;
   private dayLength = 480;
   private targetId: number | null = null;
@@ -197,7 +209,8 @@ export class GameClient {
     this.cameraRig = new CameraRig(this.ctx.camera);
     this.overlay = new Overlay(byId('overlay'), (x, y, z) => this.ctx.toScreen(x, y, z));
     this.minimap = new Minimap(byId<HTMLCanvasElement>('minimap'));
-    this.title = new TitleScreen(this.identity.name);
+    this.title = new TitleScreen(this.identity.name, this.playerClass);
+    this.classPanel = new ClassPanel({ choose: (cls, spec) => this.connection.send({ t: 'class', cls, spec }) });
     this.journal = new JournalView({
       track: (id) => this.track(id),
       title: (id) => this.connection.send({ t: 'title', title: id }),
@@ -236,11 +249,12 @@ export class GameClient {
   // ------------------------------------------------------------------ setup
 
   private bindUi(): void {
-    this.title.onEnter((name) => this.enter(name));
+    this.title.onEnter((name, cls) => this.enter(name, cls));
     this.chat.onSend((text) => this.connection.send({ t: 'chat', text }));
     bindSkillBar(byId('skills'), {
-      skill: (id) => this.useSkill(id),
-      strikeHeld: (held) => {
+      slot: (i) => this.useSlot(i),
+      tonic: () => this.useSkill(TONIC),
+      basicHeld: (held) => {
         this.strikeTouch = held;
       },
       jump: (held) => {
@@ -252,11 +266,12 @@ export class GameClient {
       if ([' ', 'tab', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'enter'].includes(key)) event.preventDefault();
       switch (key) {
         case ' ': this.jumpQueued = true; break;
-        case '1': this.useSkill('strike'); break;
-        case '2': this.useSkill('bolt'); break;
-        case '3': this.useSkill('mend'); break;
-        case '4': this.useSkill('ring'); break;
-        case 'q': this.useSkill('tonic'); break;
+        case '1': this.useSlot(0); break;
+        case '2': this.useSlot(1); break;
+        case '3': this.useSlot(2); break;
+        case '4': this.useSlot(3); break;
+        case 'q': this.useSkill(TONIC); break;
+        case 'c': this.toggleClasses(); break;
         case 'e': if (this.nearNpc) this.openNpc(this.nearNpc); break;
         case 'j': this.toggleJournal(); break;
         case 'p': this.toggleStable(); break;
@@ -284,6 +299,7 @@ export class GameClient {
     });
     byId('journalBtn').addEventListener('click', () => this.toggleJournal());
     byId('stableBtn').addEventListener('click', () => this.toggleStable());
+    byId('classBtn').addEventListener('click', () => this.toggleClasses());
     byId('rideBtn').addEventListener('click', () => this.toggleMount());
     byId('boardsBtn').addEventListener('click', () => this.toggleBoards());
     byId('questBox').addEventListener('click', () => this.toggleJournal());
@@ -305,9 +321,11 @@ export class GameClient {
 
   // ------------------------------------------------------------------ session lifecycle
 
-  private enter(name: string): void {
+  private enter(name: string, cls: ClassId): void {
     this.playerName = name;
+    this.playerClass = cls;
     rememberName(name);
+    rememberClass(cls);
     this.phase = 'connecting';
     this.rejectReason = '';
     this.leaving = false;
@@ -316,7 +334,7 @@ export class GameClient {
   }
 
   private onOpen(): void {
-    this.connection.send({ t: 'hello', v: PROTOCOL_VERSION, token: this.identity.token, name: this.playerName });
+    this.connection.send({ t: 'hello', v: PROTOCOL_VERSION, token: this.identity.token, name: this.playerName, cls: this.playerClass });
   }
 
   private onClose(code: number, reason: string): void {
@@ -391,8 +409,9 @@ export class GameClient {
     this.timeOfDay = msg.day;
     this.haveSnapshot = false;
     this.longestFrame = 0;
-    this.cooldowns = zeroCooldowns();
-    this.views.addHero(msg.you, msg.look);
+    this.cooldowns = {};
+    this.selfLook = msg.look;
+    this.views.addHero(msg.you, msg.look, msg.progress.cls);
     if (this.generated && this.local) this.local.reset(this.generated.playerSpawn);
     this.phase = 'playing';
     this.zone = -1;
@@ -432,6 +451,15 @@ export class GameClient {
 
     const { added, removed } = this.entities.apply(msg.ents, msg.gone, msg.st);
     for (const e of added) this.addEntityView(e);
+    // A hero who changed class gets the new class's weapon.
+    for (const u of msg.ents) {
+      if ('k' in u || !('cl' in u) || u.cl === undefined) continue;
+      const e = this.entities.get(u.id);
+      if (e && !added.includes(e)) {
+        this.views.remove(u.id);
+        this.views.add(e.state);
+      }
+    }
     for (const e of removed) {
       this.views.remove(e.id);
       this.companions.remove(e.id);
@@ -444,6 +472,15 @@ export class GameClient {
   private onProgress(p: PlayerProgress): void {
     const before = this.progress;
     this.progress = p;
+    const spec = activeSpec(p.cls, p.specs, p.level);
+    this.kit = kitFor(p.cls, spec);
+    this.hud.setKit(p.cls, this.kit, powerFor(p.level, p.weapon), passiveOf(spec));
+    if (before && before.cls !== p.cls) {
+      this.cooldowns = {};
+      this.playerClass = p.cls;
+      rememberClass(p.cls);
+      this.views.addHero(this.selfId, this.selfLook, p.cls);
+    }
     this.hud.setProgress(p);
     // Follow whichever story just moved, unless the tracked one is still going.
     if (before) {
@@ -462,6 +499,18 @@ export class GameClient {
     if (npc && this.dialog.isOpen) this.dialog.show(npc, npcTopics(npc, p, Date.now(), { medals: this.medals }), (a) => this.chooseTopic(npc, a), true);
     this.journal.refresh(p, this.tracked, Date.now());
     this.stable.refresh(p);
+    this.classPanel.refresh(p);
+  }
+
+  private toggleClasses(): void {
+    if (this.phase !== 'playing' || !this.progress) return;
+    if (this.classPanel.isOpen) this.classPanel.close();
+    else {
+      this.dialog.close();
+      this.journal.close();
+      this.stable.close();
+      this.classPanel.open(this.progress);
+    }
   }
 
   private toggleStable(): void {
@@ -539,7 +588,7 @@ export class GameClient {
       case 'lvl': {
         const at = this.feetOf(ev.id);
         if (at) this.effects.levelUp(at);
-        if (ev.id === this.selfId) this.notices.banner(`Level ${ev.lv}`, 'Health and mana restored');
+        if (ev.id === this.selfId) this.notices.banner(`Level ${ev.lv}`, 'Health restored');
         break;
       }
       case 'swing':
@@ -549,14 +598,19 @@ export class GameClient {
         if (ev.id !== this.selfId) this.views.cast(ev.id);
         break;
       case 'bolt':
-        this.effects.bolt(() => this.chestOf(ev.from), () => this.chestOf(ev.to), ev.flight);
+        this.effects.bolt(() => this.chestOf(ev.from), () => this.chestOf(ev.to), ev.flight, ev.c);
         break;
       case 'ring': {
         const at = this.feetOf(ev.id);
         if (at) {
-          this.effects.ringPulse({ x: at.x, y: at.y + 0.15, z: at.z }, 0xff8a2a, 0.6, ev.r + 0.4, 0.45);
-          this.effects.ringPulse({ x: at.x, y: at.y + 0.6, z: at.z }, 0xffc066, 0.4, ev.r, 0.55, 0.6);
+          this.effects.ringPulse({ x: at.x, y: at.y + 0.15, z: at.z }, ev.c, 0.6, ev.r + 0.4, 0.45);
+          this.effects.ringPulse({ x: at.x, y: at.y + 0.6, z: at.z }, ev.c, 0.4, ev.r, 0.55, 0.6);
         }
+        break;
+      }
+      case 'fx': {
+        const at = this.chestOf(ev.id);
+        if (at) this.overlay.floatText(at.x, at.y + 0.9, at.z, ev.text, ev.good ? 'buff' : 'debuff');
         break;
       }
       case 'slamWarn':
@@ -596,20 +650,24 @@ export class GameClient {
 
   // ------------------------------------------------------------------ player actions
 
-  private useSkill(id: SkillId): void {
+  private useSlot(index: number): void {
+    const def = this.kit[index];
+    if (def) this.useSkill(def);
+  }
+
+  private useSkill(def: SkillDef): void {
     const self = this.self;
     const progress = this.progress;
     if (this.phase !== 'playing' || !self || !progress || self.dead) return;
-    const def = SKILLS[id];
     if (progress.level < def.unlockLevel) return this.notices.toast(`${def.name} unlocks at level ${def.unlockLevel}`, 1.6);
-    if (this.cooldowns[id] > 0) return;
-    if (def.mana > self.mp) return this.notices.toast('Not enough mana', 1.4);
-    if (id === 'tonic' && progress.tonics <= 0) return this.notices.toast('No tonics left. Smith Oda sells them.', 2);
-    this.connection.send({ t: 'skill', skill: id, target: this.targetId });
-    this.cooldowns[id] = def.cooldown;
+    if ((this.cooldowns[def.id] ?? 0) > 0) return;
+    if (def.cost > self.mp) return this.notices.toast(`Not enough ${RESOURCES[CLASSES[progress.cls].resource.kind].name}`, 1.4);
+    if (def === TONIC && progress.tonics <= 0) return this.notices.toast('No tonics left. Smith Oda sells them.', 2);
+    this.connection.send({ t: 'skill', skill: def.id, target: this.targetId });
+    this.cooldowns[def.id] = def.cooldown;
     this.lastStrike = this.now;
-    if (id === 'strike') this.views.swing(this.selfId);
-    else if (id !== 'tonic') this.views.cast(this.selfId);
+    if (def.delivery === 'melee') this.views.swing(this.selfId);
+    else if (def !== TONIC) this.views.cast(this.selfId);
   }
 
   private setTarget(id: number | null): void {
@@ -682,6 +740,7 @@ export class GameClient {
     else if (this.dialog.isOpen) this.dialog.close();
     else if (this.journal.isOpen) this.journal.close();
     else if (this.stable.isOpen) this.stable.close();
+    else if (this.classPanel.isOpen) this.classPanel.close();
     else if (this.boards.isOpen) this.boards.close();
     else this.setTarget(null);
   }
@@ -732,7 +791,7 @@ export class GameClient {
     const world = this.generated?.world;
     if (!local || !world) return;
     this.timeOfDay = (this.timeOfDay + elapsed / this.dayLength) % 1;
-    for (const id of SKILL_IDS) this.cooldowns[id] = Math.max(0, this.cooldowns[id] - elapsed);
+    for (const id of Object.keys(this.cooldowns) as SkillId[]) this.cooldowns[id] = Math.max(0, (this.cooldowns[id] ?? 0) - elapsed);
 
     // Fixed-step prediction: every step is sent to the server with a sequence number.
     if (this.haveSnapshot) {
@@ -752,7 +811,9 @@ export class GameClient {
     }
     local.renderPosition(this.accumulator / SIM_DT, dt, this.renderPos);
 
-    if ((this.strikeTouch || this.keyboard.isDown('1')) && this.cooldowns.strike <= 0 && this.now - this.lastStrike > 0.2) this.useSkill('strike');
+    // Skill 1 repeats while held, for every class.
+    const basic = this.kit[0];
+    if (basic && (this.strikeTouch || this.keyboard.isDown('1')) && (this.cooldowns[basic.id] ?? 0) <= 0 && this.now - this.lastStrike > 0.2) this.useSkill(basic);
 
     const dead = this.self?.dead ?? false;
     const lift = this.companions.update(this.selfId, { ...this.renderPos, yaw: local.yaw }, this.self?.mt ?? null, this.progress?.pet ?? null, dead, dt, this.now);

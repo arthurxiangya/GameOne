@@ -6,12 +6,13 @@ import {
   coursePoints,
   formatRaceTime,
   isAtPoint,
+  isOffensive,
   medalFor,
   medalTimes,
   type Medal,
   type ModeState,
   type RaceCourse,
-  type SkillId,
+  type SkillDef,
   type Vec3,
 } from '@lanternwood/shared';
 import type { Player } from '../../domain/entities/player';
@@ -27,7 +28,6 @@ interface Run {
   next: number;
 }
 
-const ATTACKS: readonly SkillId[] = ['strike', 'bolt', 'ring'];
 const MEDAL_NAMES: Readonly<Record<Medal, string>> = { gold: 'Gold', silver: 'Silver', bronze: 'Bronze' };
 
 /**
@@ -117,8 +117,8 @@ export class EmberRun implements GameMode {
     if (run) this.end(run, 'You fell off the realm. The run is over.');
   }
 
-  skillBlocked(player: Player, skill: SkillId): string | null {
-    return this.runs.has(player.id) && ATTACKS.includes(skill) ? 'No fighting during the Ember Run.' : null;
+  skillBlocked(player: Player, skill: SkillDef): string | null {
+    return this.runs.has(player.id) && isOffensive(skill) ? 'No fighting during the Ember Run.' : null;
   }
 
   mountBlocked(player: Player): string | null {

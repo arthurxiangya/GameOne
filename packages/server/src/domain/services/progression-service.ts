@@ -3,8 +3,7 @@ import {
   MOUNTS,
   PET_MAX_LEVEL,
   PET_XP_SHARE,
-  SKILLS,
-  SKILL_IDS,
+  SPEC_LEVEL,
   TITLES,
   petXpToNext,
   xpToNext,
@@ -31,10 +30,10 @@ export class ProgressionService {
       player.restoreVitals();
       this.events.area(player.body.x, player.body.z, { e: 'lvl', id: player.id, lv: p.level });
       this.events.player(player.id, { e: 'log', text: `You reached level ${p.level}!`, c: 'sys' });
-      for (const id of SKILL_IDS) {
-        const skill = SKILLS[id];
+      for (const skill of player.kit) {
         if (skill.unlockLevel === p.level) this.events.player(player.id, { e: 'toast', text: `New skill: ${skill.name}` });
       }
+      if (p.level === SPEC_LEVEL) this.events.player(player.id, { e: 'toast', text: 'Specializations open: press C to choose one.' });
     }
     if (p.level >= MAX_LEVEL) p.xp = 0;
     player.touchProgress();

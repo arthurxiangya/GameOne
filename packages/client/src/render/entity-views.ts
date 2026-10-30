@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { damp, lerp, lerpAngle, lookAt, type EntityState, type NpcDef, type Vec3, type VoxelWorld } from '@lanternwood/shared';
-import { buildHero, buildMonster, buildNpc, type ModelRig } from './models';
+import { damp, lerp, lerpAngle, lookAt, type ClassId, type EntityState, type NpcDef, type Vec3, type VoxelWorld } from '@lanternwood/shared';
+import { buildHero, buildMonster, buildNpc, heroGear, type ModelRig } from './models';
 
 interface View {
   readonly rig: ModelRig;
@@ -49,15 +49,15 @@ export class EntityViews {
 
   add(state: EntityState): void {
     if (this.views.has(state.id)) return;
-    const rig = state.k === 'm' ? buildMonster(state.ty) : buildHero(lookAt(state.look), { lamp: true, blade: true });
+    const rig = state.k === 'm' ? buildMonster(state.ty) : buildHero(lookAt(state.look), heroGear(state.cl));
     const baseScale = state.k === 'm' ? state.sc : 1;
     this.register(state.id, rig, baseScale, state.x, state.z);
   }
 
-  addHero(id: number, look: number): void {
+  addHero(id: number, look: number, cls: ClassId): void {
     this.remove(this.heroId ?? -1);
     this.heroId = id;
-    this.register(id, buildHero(lookAt(look), { lamp: true, blade: true }), 1, 0, 0);
+    this.register(id, buildHero(lookAt(look), heroGear(cls)), 1, 0, 0);
   }
 
   remove(id: number): void {

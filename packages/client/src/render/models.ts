@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MONSTERS, type Look, type MonsterType, type NpcId } from '@lanternwood/shared';
+import { CLASSES, MONSTERS, type ClassId, type Look, type MonsterType, type NpcId } from '@lanternwood/shared';
 
 /** A voxel character: the root to position, plus the joints the animator moves. */
 export interface ModelRig {
@@ -59,6 +59,27 @@ interface HeroOptions {
   readonly rod?: boolean;
   /** A wide-brimmed hat in this colour. */
   readonly hat?: number;
+  /** A shield on the left arm, in this colour. */
+  readonly shield?: number;
+  readonly bow?: boolean;
+  /** A hand bell instead of a lamp. */
+  readonly bell?: boolean;
+}
+
+/** What a hero of each class carries. */
+export function heroGear(cls: ClassId): HeroOptions {
+  switch (CLASSES[cls].weapon) {
+    case 'shield':
+      return { hammer: true, shield: 0x9a7b3c };
+    case 'staff':
+      return { staff: true, lamp: true };
+    case 'bow':
+      return { bow: true };
+    case 'sword':
+      return { blade: true, lamp: true };
+    case 'bell':
+      return { bell: true, robe: true };
+  }
 }
 
 /** Hooded lantern-keeper figure used for players and townsfolk. */
@@ -98,6 +119,22 @@ export function buildHero(look: Look, options: HeroOptions = {}): ModelRig {
   if (options.hammer) {
     part(armR, 0.07, 0.6, 0.07, 0x6f4b2d, 0, -0.45, 0.12);
     part(armR, 0.32, 0.2, 0.2, 0x8f939c, 0, -0.75, 0.12);
+  }
+  if (options.shield !== undefined) {
+    part(armL, 0.08, 0.56, 0.46, options.shield, -0.1, -0.36, 0.08);
+    part(armL, 0.09, 0.18, 0.18, 0xffd27a, -0.13, -0.36, 0.08, true);
+  }
+  if (options.bow) {
+    part(armL, 0.06, 0.95, 0.06, 0x7a5232, 0, -0.42, 0.16);
+    part(armL, 0.06, 0.06, 0.2, 0x7a5232, 0, 0.03, 0.08);
+    part(armL, 0.06, 0.06, 0.2, 0x7a5232, 0, -0.87, 0.08);
+    part(armL, 0.015, 0.92, 0.015, 0xe8e2d6, 0, -0.42, 0.0);
+    part(body, 0.14, 0.5, 0.12, 0x5a3b26, 0.12, 0.9, -0.22);
+  }
+  if (options.bell) {
+    part(armR, 0.05, 0.28, 0.05, 0x6f4b2d, 0, -0.5, 0.06);
+    part(armR, 0.24, 0.2, 0.24, 0xd9b44a, 0, -0.72, 0.06);
+    part(armR, 0.08, 0.06, 0.08, 0xa6d8ff, 0, -0.85, 0.06, true);
   }
   return { root, body, legs: [legL, legR], arms: [], armR, armL, lamp, hop: false, splay: false, height: 1.8 };
 }

@@ -24,7 +24,7 @@ function setup(maxPlayers = 4) {
   const join = async (name: string, secret = token(++n)): Promise<FakeLink> => {
     const link = new FakeLink(`link-${name}-${n}`);
     sessions.connect(link);
-    await sessions.receive(link, JSON.stringify({ t: 'hello', v: PROTOCOL_VERSION, token: secret, name }));
+    await sessions.receive(link, JSON.stringify({ t: 'hello', v: PROTOCOL_VERSION, token: secret, name, cls: 'emberblade' }));
     return link;
   };
   const tick = (): void => {

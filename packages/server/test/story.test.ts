@@ -26,8 +26,8 @@ const defeat = (world: GameWorld, hero: Player, type: 'toad' | 'boar' | 'puffcap
   const m = monsterOf(world, type, index);
   standNextTo(hero, m);
   m.hp = 1;
-  hero.cooldowns.strike = 0;
-  assert.ok(world.execute(hero.id, { kind: 'skill', skill: 'strike', target: m.id }).ok);
+  hero.cooldowns.clear();
+  assert.ok(world.execute(hero.id, { kind: 'skill', skill: 'slash', target: m.id }).ok);
 };
 
 const visit = (world: GameWorld, hero: Player, place: string): void => {

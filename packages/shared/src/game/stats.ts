@@ -5,7 +5,6 @@ export const CRIT_CHANCE = 0.15;
 export const CRIT_MULTIPLIER = 1.6;
 
 export const maxHpFor = (level: number): number => 90 + 24 * (level - 1);
-export const maxMpFor = (level: number): number => 40 + 8 * (level - 1);
 export const attackFor = (level: number, weaponTier: number): number => 10 + 3.4 * (level - 1) + 4 * weaponTier;
 
 /** Experience needed to advance from `level` to `level + 1`. */
@@ -26,9 +25,8 @@ export function killGold(monsterLevel: number, boss: boolean, roll: number): num
 export const outlevelledDamageMultiplier = (monsterLevel: number, playerLevel: number): number =>
   monsterLevel > playerLevel + 2 ? 1.25 : 1;
 
+/** Health regeneration. Each class's resource has its own rates (see `classes.ts`). */
 export const REGEN = {
-  manaPerSecondInCombat: 1.5,
-  manaPerSecondOutOfCombat: 4,
   /** Fraction of max HP per second once out of combat. */
   healthFractionPerSecond: 0.04,
   /** Seconds without taking damage before health regenerates. */

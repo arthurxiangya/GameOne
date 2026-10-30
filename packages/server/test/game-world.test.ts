@@ -129,8 +129,8 @@ describe('GameWorld', () => {
       const puffcap = monsterOf(world, 'puffcap', i);
       standNextTo(hero, puffcap);
       puffcap.hp = 1;
-      hero.cooldowns.strike = 0;
-      assert.ok(world.execute(hero.id, { kind: 'skill', skill: 'strike', target: puffcap.id }).ok);
+      hero.cooldowns.clear();
+      assert.ok(world.execute(hero.id, { kind: 'skill', skill: 'slash', target: puffcap.id }).ok);
     }
     assert.equal(hero.progress.story.main.state, 'ready');
 
@@ -175,7 +175,7 @@ describe('MonsterAi', () => {
     runTicks(world, 40);
     assert.equal(puffcap.mode, 'idle');
     standNextTo(hero, puffcap, 1);
-    assert.ok(world.execute(hero.id, { kind: 'skill', skill: 'strike', target: puffcap.id }).ok);
+    assert.ok(world.execute(hero.id, { kind: 'skill', skill: 'slash', target: puffcap.id }).ok);
     runTicks(world, 2);
     assert.equal(puffcap.mode, 'chase');
   });
@@ -199,7 +199,7 @@ describe('MonsterAi', () => {
     const puffcap = monsterOf(world, 'puffcap');
     standNextTo(hero, puffcap);
     puffcap.hp = 1;
-    world.execute(hero.id, { kind: 'skill', skill: 'strike', target: puffcap.id });
+    world.execute(hero.id, { kind: 'skill', skill: 'slash', target: puffcap.id });
     assert.equal(puffcap.alive, false);
     Object.assign(hero.body, { x: 0, y: 12.5, z: 0 });
     runTicks(world, Math.ceil(puffcap.def.respawnSeconds / 0.05) + 5);

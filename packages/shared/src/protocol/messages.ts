@@ -6,6 +6,7 @@ import type { SiegeState } from '../game/siege';
 import type { NpcAction, NpcId } from '../game/npcs';
 import type { PlayerProgress } from '../game/progress';
 import type { SkillId } from '../game/skills';
+import type { ClassId, SpecId } from '../game/classes';
 import type { TitleId } from '../game/titles';
 
 /**
@@ -26,13 +27,16 @@ export interface InputFrame {
 }
 
 export type ClientMessage =
-  | { readonly t: 'hello'; readonly v: number; readonly token: string; readonly name: string }
+  /** `cls` is the class chosen on the title screen; heroes always enter in town, where class changes are allowed. */
+  | { readonly t: 'hello'; readonly v: number; readonly token: string; readonly name: string; readonly cls: ClassId }
   | { readonly t: 'input'; readonly frames: readonly InputFrame[] }
   | { readonly t: 'skill'; readonly skill: SkillId; readonly target: number | null }
   /** `arg` names the story chain for story actions and the item for `buy`; null otherwise. */
   | { readonly t: 'npc'; readonly npc: NpcId; readonly action: NpcAction; readonly arg: string | null }
   /** Choose which earned title shows under your name (null for none). */
   | { readonly t: 'title'; readonly title: TitleId | null }
+  /** Change class (in Emberhold, out of combat) and/or specialization (level 10+, out of combat). */
+  | { readonly t: 'class'; readonly cls: ClassId; readonly spec: SpecId | null }
   /** Call your mount (`on`), or get off it. */
   | { readonly t: 'mount'; readonly on: boolean }
   /** Choose which owned mount R calls, or which pet follows you (null for none). */
@@ -73,6 +77,8 @@ export interface PlayerEntityState {
   readonly mt: MountId | null;
   /** The pet following this hero. */
   readonly pet: PetId | null;
+  /** The hero's class. */
+  readonly cl: ClassId;
 }
 
 export interface MonsterEntityState {
@@ -122,12 +128,23 @@ export interface SelfState {
   readonly mp: number;
   readonly mmp: number;
   readonly dead: boolean;
-  /** Remaining cooldown per skill, in seconds. */
-  readonly cd: Readonly<Record<SkillId, number>>;
+  /** Remaining cooldown per skill of the current kit, in seconds. */
+  readonly cd: Readonly<Partial<Record<SkillId, number>>>;
+  /** Your active statuses: id, name, seconds left, and whether it helps you. */
+  readonly st: readonly SelfStatus[];
+  /** Damage your shield still absorbs. */
+  readonly sh: number;
   /** The mount being ridden; movement prediction uses its speed. */
   readonly mt: MountId | null;
   /** Seconds left calling a mount, or 0. */
   readonly call: number;
+}
+
+export interface SelfStatus {
+  readonly id: string;
+  readonly name: string;
+  readonly left: number;
+  readonly good: boolean;
 }
 
 export type LogClass = 'sys' | 'foe' | 'loot' | 'good';
@@ -184,8 +201,10 @@ export type GameEvent =
   | { readonly e: 'lvl'; readonly id: number; readonly lv: number }
   | { readonly e: 'swing'; readonly id: number }
   | { readonly e: 'cast'; readonly id: number }
-  | { readonly e: 'bolt'; readonly from: number; readonly to: number; readonly flight: number }
-  | { readonly e: 'ring'; readonly id: number; readonly r: number }
+  | { readonly e: 'bolt'; readonly from: number; readonly to: number; readonly flight: number; readonly c: number }
+  | { readonly e: 'ring'; readonly id: number; readonly r: number; readonly c: number }
+  /** A status landed on someone, or a shield went up: a floating label. */
+  | { readonly e: 'fx'; readonly id: number; readonly text: string; readonly good: boolean }
   | { readonly e: 'slamWarn'; readonly x: number; readonly y: number; readonly z: number; readonly r: number; readonly delay: number }
   | { readonly e: 'slam'; readonly x: number; readonly y: number; readonly z: number; readonly r: number }
   | { readonly e: 'xp'; readonly amt: number }

@@ -1,4 +1,4 @@
-import { DUEL, eloAfter, type DuelResult, type DuelState, type SkillId } from '@lanternwood/shared';
+import { DUEL, eloAfter, type DuelResult, type DuelState, type SkillDef } from '@lanternwood/shared';
 import type { Player } from '../../domain/entities/player';
 import { fail, ok, type Result } from '../../domain/result';
 import type { GameMode, ModeHost } from './game-mode';
@@ -156,11 +156,11 @@ export class Duels implements GameMode {
     if (duel) this.end(duel, duel.a === player ? duel.b : duel.a, `${player.name} fell out of the ring.`);
   }
 
-  skillBlocked(player: Player, skill: SkillId): string | null {
+  skillBlocked(player: Player, skill: SkillDef): string | null {
     const duel = this.duels.get(player.id);
     if (!duel) return null;
     if (duel.phase === 'countdown') return 'Wait for the countdown.';
-    return skill === 'tonic' ? 'No tonics in a duel.' : null;
+    return skill.id === 'tonic' ? 'No tonics in a duel.' : null;
   }
 
   mountBlocked(player: Player): string | null {
@@ -194,6 +194,10 @@ export class Duels implements GameMode {
     for (const p of [a, b]) {
       p.dismount();
       p.duelLevel = level;
+      // A fair start: no buffs, wards or cooldowns carried in.
+      p.statuses.clear();
+      p.shield = 0;
+      p.cooldowns.clear();
       p.restoreVitals();
       this.duels.set(p.id, duel);
     }

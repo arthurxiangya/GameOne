@@ -13,6 +13,8 @@ export interface AiWorld {
   ignoredByMonsters(player: Player): boolean;
   /** A monster with a goal reached it and struck (the Great Lantern on Lantern Night). */
   strikeGoal(m: Monster, amount: number): void;
+  /** Simulation time, for statuses and taunts. */
+  readonly time: number;
 }
 
 /** Monsters with a goal strike it from this close. */
@@ -41,6 +43,13 @@ export class MonsterAi {
     }
     m.moving = false;
     this.updateSlam(m, dt);
+    m.statuses.expire(this.world.time);
+    if (!m.def.boss && m.statuses.stunned(this.world.time)) {
+      // Stunned: no moving, no swinging. A swing that was winding up is lost.
+      m.windup = 0;
+      m.attackCooldown = Math.max(0, m.attackCooldown - dt);
+      return;
+    }
     if (m.goal) {
       this.updateMarcher(m, m.goal, dt);
       const ground = this.world.surfaceY(m.x, m.z);
@@ -126,6 +135,15 @@ export class MonsterAi {
     }
     if (m.mode !== 'chase') return null;
 
+    if (m.tauntedBy !== null) {
+      const taunter = m.tauntUntil > this.world.time ? this.world.player(m.tauntedBy) : undefined;
+      if (taunter && !taunter.dead && sameFight(m, taunter.party) && !this.world.ignoredByMonsters(taunter)) {
+        m.targetId = taunter.id;
+        return taunter;
+      }
+      m.tauntedBy = null;
+    }
+
     let target: Player | null = null;
     let topThreat = Number.NEGATIVE_INFINITY;
     for (const [id, threat] of m.threat) {
@@ -202,8 +220,9 @@ export class MonsterAi {
   }
 
   private moveToward(m: Monster, ux: number, uz: number, speed: number, dt: number): void {
-    const nx = m.x + ux * speed * dt;
-    const nz = m.z + uz * speed * dt;
+    const step = speed * (1 - m.statuses.slow(this.world.time)) * dt;
+    const nx = m.x + ux * step;
+    const nz = m.z + uz * step;
     const ground = this.world.surfaceY(nx, nz);
     if (ground !== NO_GROUND && ground - m.y < MAX_CLIMB) {
       m.x = nx;

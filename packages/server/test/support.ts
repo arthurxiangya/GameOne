@@ -1,4 +1,4 @@
-import { applyEntityUpdates, generateWorld, newProgress, type EntityState, type GeneratedWorld, type MonsterType, type RandomSource, type ServerMessage } from '@lanternwood/shared';
+import { applyEntityUpdates, generateWorld, newProgress, type ClassId, type EntityState, type GeneratedWorld, type MonsterType, type RandomSource, type ServerMessage } from '@lanternwood/shared';
 import { GameWorld } from '../src/application/game-world';
 import type { ClientLink, SystemTime } from '../src/application/ports';
 import type { Calendar } from '../src/domain/ports';
@@ -36,8 +36,8 @@ export const runTicks = (world: GameWorld, ticks: number, dt = 0.05): void => {
 
 export const token = (n: number): string => n.toString(16).padStart(32, 'a');
 
-export function spawnHero(world: GameWorld, name = 'Tester', level = 1): Player {
-  const progress = { ...newProgress(name), level };
+export function spawnHero(world: GameWorld, name = 'Tester', level = 1, cls: ClassId = 'emberblade'): Player {
+  const progress = { ...newProgress(name, cls), level };
   return world.spawnPlayer(token(name.length + level * 97), 0, progress);
 }
 

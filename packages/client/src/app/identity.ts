@@ -1,5 +1,8 @@
+import { DEFAULT_CLASS, isClassId, type ClassId } from '@lanternwood/shared';
+
 const TOKEN_KEY = 'lanternwood.token';
 const NAME_KEY = 'lanternwood.name';
+const CLASS_KEY = 'lanternwood.class';
 
 export interface Identity {
   readonly token: string;
@@ -42,3 +45,13 @@ export function loadIdentity(): Identity {
 }
 
 export const rememberName = (name: string): void => write(NAME_KEY, name);
+
+/** The class chosen last time, for the title screen. */
+export function loadClass(): ClassId {
+  const stored = read(CLASS_KEY);
+  return isClassId(stored) ? stored : DEFAULT_CLASS;
+}
+
+export function rememberClass(cls: ClassId): void {
+  write(CLASS_KEY, cls);
+}

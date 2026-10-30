@@ -1,4 +1,5 @@
 import { MONSTERS, SLAM, monsterDamage, monsterMaxHp, type MonsterDef, type MonsterType } from '@lanternwood/shared';
+import { StatusList } from '../statuses';
 
 /** For monsters a mode spawns: stat overrides, and where they march. */
 export interface MonsterOptions {
@@ -60,6 +61,10 @@ export class Monster {
   targetId: number | null = null;
   /** Damage dealt per player; the monster fights whoever has the most. */
   readonly threat = new Map<number, number>();
+  readonly statuses = new StatusList();
+  /** A taunting hero, and until when the monster must fight them. */
+  tauntedBy: number | null = null;
+  tauntUntil = 0;
 
   constructor(
     readonly id: number,
@@ -110,6 +115,16 @@ export class Monster {
     this.threat.set(playerId, (this.threat.get(playerId) ?? 0) + amount);
   }
 
+  /** Makes the monster fight this hero until `until`, and leaves them on top of its threat list. */
+  taunt(playerId: number, until: number): void {
+    let top = 0;
+    for (const t of this.threat.values()) top = Math.max(top, t);
+    this.threat.set(playerId, top + 1);
+    this.tauntedBy = playerId;
+    this.tauntUntil = until;
+    this.provoke();
+  }
+
   /** Being hit wakes a passive or returning monster. Goal-only monsters keep marching. */
   provoke(): void {
     if (this.goalOnly) return;
@@ -123,6 +138,8 @@ export class Monster {
     this.slam = null;
     this.targetId = null;
     this.threat.clear();
+    this.statuses.clear();
+    this.tauntedBy = null;
     this.deadFor = 0;
     this.respawnIn = this.def.respawnSeconds;
   }
