@@ -1,4 +1,4 @@
-import { NO_GROUND, SLAM, damp, lerpAngle, outlevelledDamageMultiplier, type RandomSource } from '@lanternwood/shared';
+import { NO_GROUND, SLAM, capModifier, damp, lerpAngle, outlevelledDamageMultiplier, type RandomSource } from '@lanternwood/shared';
 import { sameFight, type Monster } from '../entities/monster';
 import type { Player } from '../entities/player';
 import type { EventSink } from '../events';
@@ -45,9 +45,7 @@ export class MonsterAi {
     this.updateSlam(m, dt);
     m.statuses.expire(this.world.time);
     if (!m.def.boss && m.statuses.stunned(this.world.time)) {
-      // Stunned: no moving, no swinging. A swing that was winding up is lost.
-      m.windup = 0;
-      m.attackCooldown = Math.max(0, m.attackCooldown - dt);
+      // Stunned: the monster freezes, and a swing that was winding up waits until the stun ends.
       return;
     }
     if (m.goal) {
@@ -176,7 +174,7 @@ export class MonsterAi {
       m.windup -= dt;
       if (m.windup <= 0 && gap < reach + 0.9 && dy < 2.6) {
         const roll = 0.85 + this.rng.next() * 0.3;
-        this.combat.damagePlayer(target, m.damage * roll * outlevelledDamageMultiplier(m.level, target.level), m, 'hit');
+        this.combat.damagePlayer(target, m.damage * roll * outlevelledDamageMultiplier(m.level, target.level) * this.weakness(m), m, 'hit');
       }
     } else if (gap <= reach + 0.2 && m.attackCooldown <= 0) {
       m.windup = m.def.windup;
@@ -232,6 +230,11 @@ export class MonsterAi {
     if (m.mode !== 'chase') m.yaw = lerpAngle(m.yaw, Math.atan2(ux, uz), damp(8, dt));
   }
 
+  /** Statuses that weaken a monster's blows (Choking Smoke), capped like every modifier. */
+  private weakness(m: Monster): number {
+    return 1 + capModifier(m.statuses.sum('damageDealt', this.world.time));
+  }
+
   private startSlam(m: Monster): void {
     m.slam = { x: m.x, y: m.y, z: m.z, remaining: SLAM.delay };
     m.slamCooldown = SLAM.cooldown + this.rng.next() * 2;
@@ -246,7 +249,7 @@ export class MonsterAi {
     m.slam = null;
     this.events.area(x, z, { e: 'slam', x, y, z, r: SLAM.radius });
     for (const p of this.world.playersNear(x, z, SLAM.radius)) {
-      if (!p.dead && Math.abs(p.body.y - y) < 4 && sameFight(m, p.party)) this.combat.damagePlayer(p, m.slamDamage + this.rng.next() * 12, m, 'slam');
+      if (!p.dead && Math.abs(p.body.y - y) < 4 && sameFight(m, p.party)) this.combat.damagePlayer(p, (m.slamDamage + this.rng.next() * 12) * this.weakness(m), m, 'slam');
     }
   }
 }

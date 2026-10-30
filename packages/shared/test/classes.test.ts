@@ -6,10 +6,14 @@ import {
   CLASS_IDS,
   MODIFIER_CAP,
   SPEC_LEVEL,
+  TALENTS,
+  TALENT_LEVELS,
   activeSpec,
+  activeTalents,
   describeSkill,
   isOffensive,
   kitFor,
+  loadout,
   type ClassSkillId,
   type SkillDef,
 } from '../src/index';
@@ -67,5 +71,33 @@ describe('class configs', () => {
     const kit = Object.fromEntries(CLASS_IDS.flatMap((c) => kitFor(c, null).map((s) => [s.id, s])));
     for (const id of ['mend', 'ward', 'peal', 'hymn', 'shieldWall', 'kindle']) assert.equal(isOffensive(kit[id]!), false, id);
     for (const id of ['slash', 'taunt', 'discord', 'radiance', 'volley']) assert.equal(isOffensive(kit[id]!), true, id);
+  });
+
+  it('give every class four rows of three talents, each changing only its own class and at most ×1.15', () => {
+    const ids = CLASS_IDS.flatMap((c) => TALENTS[c].flat().map((t) => t.id));
+    assert.equal(new Set(ids).size, ids.length, 'talent ids are unique');
+    for (const c of CLASS_IDS) {
+      assert.equal(TALENTS[c].length, TALENT_LEVELS.length);
+      const own = new Set(CLASSES[c].skills.map((s) => s.id));
+      for (const t of TALENTS[c].flat()) {
+        assert.ok(t.change || t.passive, `${t.id} does something`);
+        if (t.change) {
+          assert.ok(own.has(t.change.skill), `${t.id} changes ${t.change.skill}`);
+          assert.ok((t.change.damage ?? 1) <= 1.15 && (t.change.healing ?? 1) <= 1.15, `${t.id} multiplies too far`);
+        }
+      }
+      for (const row of TALENTS[c]) assert.equal(row.length, 3);
+    }
+  });
+
+  it('stack a spec and talents on the same skill: patch first, then each change', () => {
+    const picks = { ranger: ['barbedArrows', null, 'cheapVolley', 'markingVolley'] };
+    const gear = loadout('ranger', { specs: { ranger: 'trapper' }, talents: picks }, 20);
+    const volley = gear.kit.find((s) => s.id === 'volley')!;
+    assert.equal(volley.cost, 30 - 10, 'Trapper sets 30, Light Quiver takes 10 off');
+    assert.equal(volley.cooldown, 7);
+    assert.deepEqual(volley.effects.map((e) => e.kind), ['damage', 'status', 'status'], 'Trapper’s snare, then the mark');
+    assert.ok(Math.abs(gear.kit[0]!.effects[0]!.kind === 'damage' ? (gear.kit[0]!.effects[0] as { k: number }).k - 0.85 * 1.15 : 1) < 1e-9);
+    assert.deepEqual(activeTalents('ranger', picks.ranger, 14).map((t) => t.id), ['barbedArrows'], 'rows 3 and 4 are still closed at 14');
   });
 });

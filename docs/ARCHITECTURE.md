@@ -178,8 +178,8 @@ Classes are data in `shared/src/game/classes.ts`. Each one has a health multipli
 - **Skills** are lists of effects (`damage`, `heal`, `shield`, `status`, `taunt`) plus a targeting mode, delivery, range and radius.
 - **One engine.** `CombatService` runs every skill the same way: check, pay, choose who it reaches, apply its effects in order.
 - **Statuses** (`domain/statuses.ts`) sit on heroes and monsters. Monster AI honours slows, stuns and taunts.
-- **Specs** are a passive plus a patch over the class's skills. `kitFor(class, spec)` resolves both, on the client and the server alike.
-- **Balance is a test.** `server/test/balance.test.ts` plays every class and spec through the real `GameWorld` and fails if a build leaves its bands (ADR 0013).
+- **Specs** are a passive plus a patch over the class's skills. **Talents** (`shared/src/game/talents.ts`) are passives and composable changes: multipliers, deltas and appended effects. `loadout()` resolves class, spec and talents into the kit and passive, on the client and the server alike (ADR 0014).
+- **Balance is a test.** `server/test/balance.test.ts` plays every class and spec through the real `GameWorld` and fails if a build leaves its bands (ADR 0013). It also measures every talent six ways: alone, in packs, surviving, in a real fight, and with a partner. It fails on talents that creep, do nothing, or leave a row with a trap or a must-pick (ADR 0014).
 
 ### Game modes
 

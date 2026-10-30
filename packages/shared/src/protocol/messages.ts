@@ -37,6 +37,8 @@ export type ClientMessage =
   | { readonly t: 'title'; readonly title: TitleId | null }
   /** Change class (in Emberhold, out of combat) and/or specialization (level 10+, out of combat). */
   | { readonly t: 'class'; readonly cls: ClassId; readonly spec: SpecId | null }
+  /** Pick a talent for your current class: `pick` 0–2 in `row` 0–3, or null to clear (out of combat). */
+  | { readonly t: 'talent'; readonly row: number; readonly pick: number | null }
   /** Call your mount (`on`), or get off it. */
   | { readonly t: 'mount'; readonly on: boolean }
   /** Choose which owned mount R calls, or which pet follows you (null for none). */

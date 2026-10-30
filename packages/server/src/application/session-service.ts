@@ -213,6 +213,9 @@ export class SessionService {
       case 'class':
         world.execute(player.id, { kind: 'class', cls: msg.cls, spec: msg.spec });
         return;
+      case 'talent':
+        world.execute(player.id, { kind: 'talent', row: msg.row, pick: msg.pick });
+        return;
       case 'title':
         world.execute(player.id, { kind: 'title', title: msg.title });
         return;

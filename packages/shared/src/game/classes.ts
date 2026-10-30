@@ -1,6 +1,7 @@
 import { clamp } from '../math/scalar';
-import { TONIC, skill, type ClassSkillId, type SkillDef, type SkillId, type StatusDef } from './skills';
+import { TONIC, skill, type ClassSkillId, type SkillDef, type SkillEffect, type SkillId, type StatusDef } from './skills';
 import { attackFor, maxHpFor } from './stats';
+import { TALENTS } from './talents';
 
 /**
  * Classes as data. A class sets a hero's health multiplier, armour, threat, resource and four
@@ -49,7 +50,52 @@ export interface Passive {
   readonly multiTarget?: number;
   /** Extra damage against slowed enemies. */
   readonly vsSlowed?: number;
+  /** Cooldowns recover and resources refill this much faster. */
+  readonly haste?: number;
+  /** Less damage taken while below 35% health. */
+  readonly guard?: number;
+  /** Share of max health restored on each kill. */
+  readonly onKill?: number;
 }
+
+/**
+ * A talent's change to one skill. Changes compose: multipliers multiply, deltas add, and
+ * effects are appended, so a spec and several talents can all touch the same skill.
+ */
+export interface TalentChange {
+  readonly skill: ClassSkillId;
+  /** Multiplies every damage and burn on the skill. Never above 1.15. */
+  readonly damage?: number;
+  /** Multiplies every heal, shield and hymn on the skill. Never above 1.15. */
+  readonly healing?: number;
+  /** Seconds added to the cooldown (negative is faster). */
+  readonly cooldown?: number;
+  readonly cost?: number;
+  readonly gain?: number;
+  /** Added to the radius; on an enemy skill a radius splashes around the target. */
+  readonly radius?: number;
+  /** Share of the damage that splashes onto everything near the target (with `radius`). */
+  readonly splash?: number;
+  /** Added to the share of damage that heals the caster. */
+  readonly leech?: number;
+  /** Turns a self skill into an area around you (for group talents). */
+  readonly target?: 'around';
+  readonly effects?: readonly SkillEffect[];
+}
+
+export interface TalentDef {
+  readonly id: string;
+  readonly name: string;
+  readonly text: string;
+  readonly passive?: Passive;
+  readonly change?: TalentChange;
+}
+
+/** Talent rows open at these levels: basic attack, survival, signature, group. */
+export const TALENT_LEVELS = [5, 8, 15, 18] as const;
+export const TALENT_ROW_THEMES = ['Basic attack', 'Survival', 'Signature', 'Group'] as const;
+/** A talent pick for each row (an id, or null), per class. */
+export type TalentPicks = readonly (string | null)[];
 
 export interface SpecDef {
   readonly id: SpecId;
@@ -291,8 +337,8 @@ const RANGER: ClassDef = {
   ],
   rotation: [
     { skill: 'aimedShot', when: 'always' },
-    { skill: 'pinningShot', when: 'always' },
     { skill: 'volley', when: 'pack' },
+    { skill: 'pinningShot', when: 'always' },
     { skill: 'quickShot', when: 'always' },
   ],
   targetOutput: 1.75,
@@ -458,37 +504,130 @@ export const specOf = (cls: ClassId, spec: SpecId | null | undefined): SpecDef |
 export const activeSpec = (cls: ClassId, specs: Readonly<Partial<Record<ClassId, SpecId>>>, level: number): SpecDef | null =>
   level >= SPEC_LEVEL ? specOf(cls, specs[cls]) : null;
 
+/** The talent with this id in a class's rows, and which row it is in. */
+export function talentOf(cls: ClassId, id: string | null | undefined): { readonly talent: TalentDef; readonly row: number } | null {
+  if (!id) return null;
+  const rows = TALENTS[cls];
+  for (let row = 0; row < rows.length; row++) {
+    const talent = rows[row]!.find((t) => t.id === id);
+    if (talent) return { talent, row };
+  }
+  return null;
+}
+
+/** The talents a hero fights with: picked for this class, in rows open at this level. */
+export function activeTalents(cls: ClassId, picks: TalentPicks | undefined, level: number): readonly TalentDef[] {
+  if (!picks) return [];
+  const out: TalentDef[] = [];
+  TALENT_LEVELS.forEach((needed, row) => {
+    const found = talentOf(cls, picks[row]);
+    if (level >= needed && found && found.row === row) out.push(found.talent);
+  });
+  return out;
+}
+
+const scaleEffect = (e: SkillEffect, damage: number, healing: number): SkillEffect => {
+  switch (e.kind) {
+    case 'damage':
+      return { ...e, k: e.k * damage };
+    case 'heal':
+      return { ...e, ...(e.k !== undefined && { k: e.k * healing }), ...(e.maxHp !== undefined && { maxHp: e.maxHp * healing }) };
+    case 'shield':
+      return { ...e, k: e.k * healing };
+    case 'status': {
+      const s = e.status;
+      return { ...e, status: { ...s, ...(s.dot !== undefined && { dot: s.dot * damage }), ...(s.hot !== undefined && { hot: s.hot * healing }) } };
+    }
+    case 'taunt':
+      return e;
+  }
+};
+
+/** One talent's change applied to a skill. */
+export function applyTalent(s: SkillDef, t: TalentDef): SkillDef {
+  const c = t.change;
+  if (!c || c.skill !== s.id) return s;
+  const damage = c.damage ?? 1;
+  const healing = c.healing ?? 1;
+  return {
+    ...s,
+    target: c.target ?? s.target,
+    cooldown: Math.max(0.5, s.cooldown + (c.cooldown ?? 0)),
+    cost: Math.max(0, s.cost + (c.cost ?? 0)),
+    gain: s.gain + (c.gain ?? 0),
+    radius: Math.max(0, s.radius + (c.radius ?? 0)),
+    splash: c.splash ?? s.splash,
+    leech: s.leech + (c.leech ?? 0),
+    effects: [...s.effects.map((e) => scaleEffect(e, damage, healing)), ...(c.effects ?? [])],
+    text: `${s.text} ${t.name}: ${t.text}`,
+  };
+}
+
 const kits = new Map<string, readonly SkillDef[]>();
 
-/** The class's four skills with the spec's changes applied. */
-export function kitFor(cls: ClassId, spec: SpecDef | null): readonly SkillDef[] {
-  const key = `${cls}/${spec?.id ?? ''}`;
+/** The class's four skills with the spec's patch, then each talent's change, applied. */
+export function kitFor(cls: ClassId, spec: SpecDef | null, talents: readonly TalentDef[] = []): readonly SkillDef[] {
+  const key = `${cls}/${spec?.id ?? ''}/${talents.map((t) => t.id).join(',')}`;
   let kit = kits.get(key);
   if (!kit) {
     kit = CLASSES[cls].skills.map((s) => {
       const patch = spec?.patch[s.id as ClassSkillId];
-      return patch ? { ...s, ...patch } : s;
+      return talents.reduce(applyTalent, patch ? { ...s, ...patch } : s);
     });
     kits.set(key, kit);
   }
   return kit;
 }
 
-/** A skill a hero of this class and spec can use (the tonic included), or null. */
-export const skillOf = (cls: ClassId, spec: SpecDef | null, id: SkillId): SkillDef | null =>
-  id === 'tonic' ? TONIC : kitFor(cls, spec).find((s) => s.id === id) ?? null;
+/** A skill a hero of this class, spec and talents can use (the tonic included), or null. */
+export const skillOf = (cls: ClassId, spec: SpecDef | null, id: SkillId, talents: readonly TalentDef[] = []): SkillDef | null =>
+  id === 'tonic' ? TONIC : kitFor(cls, spec, talents).find((s) => s.id === id) ?? null;
 
 export const ALL_SKILL_IDS: readonly SkillId[] = [...CLASS_IDS.flatMap((c) => CLASSES[c].skills.map((s) => s.id)), 'tonic'];
 export const isSkillId = (v: unknown): v is SkillId => typeof v === 'string' && ALL_SKILL_IDS.includes(v as SkillId);
 
-const NO_PASSIVE: Passive = {};
-export const passiveOf = (spec: SpecDef | null): Passive => spec?.passive ?? NO_PASSIVE;
+const PASSIVE_KEYS = ['damage', 'healing', 'maxHp', 'armor', 'crit', 'multiTarget', 'vsSlowed', 'haste', 'guard', 'onKill'] as const;
+const passives = new Map<string, Passive>();
 
-export const classMaxHp = (cls: ClassId, level: number, spec: SpecDef | null): number =>
-  Math.round(maxHpFor(level) * CLASSES[cls].health * (1 + (passiveOf(spec).maxHp ?? 0)));
+/** The spec's passive plus every talent's, added field by field. */
+export function passiveOf(spec: SpecDef | null, talents: readonly TalentDef[] = []): Passive {
+  const key = `${spec?.id ?? ''}/${talents.map((t) => t.id).join(',')}`;
+  let total = passives.get(key);
+  if (!total) {
+    const sum: Record<string, number> = {};
+    for (const p of [spec?.passive, ...talents.map((t) => t.passive)]) {
+      if (!p) continue;
+      for (const k of PASSIVE_KEYS) if (p[k] !== undefined) sum[k] = (sum[k] ?? 0) + p[k];
+    }
+    total = sum as Passive;
+    passives.set(key, total);
+  }
+  return total;
+}
 
-export const classArmor = (cls: ClassId, spec: SpecDef | null): number =>
-  clamp(CLASSES[cls].armor + (passiveOf(spec).armor ?? 0), 0, DAMAGE_REDUCTION_CAP);
+export const classMaxHp = (cls: ClassId, level: number, spec: SpecDef | null, talents: readonly TalentDef[] = []): number =>
+  Math.round(maxHpFor(level) * CLASSES[cls].health * (1 + (passiveOf(spec, talents).maxHp ?? 0)));
+
+export const classArmor = (cls: ClassId, spec: SpecDef | null, talents: readonly TalentDef[] = []): number =>
+  clamp(CLASSES[cls].armor + (passiveOf(spec, talents).armor ?? 0), 0, DAMAGE_REDUCTION_CAP);
+
+/** Everything a hero's class choices add up to at a level: spec, talents, skills and passive. */
+export interface Loadout {
+  readonly spec: SpecDef | null;
+  readonly talents: readonly TalentDef[];
+  readonly kit: readonly SkillDef[];
+  readonly passive: Passive;
+}
+
+export function loadout(
+  cls: ClassId,
+  choices: { readonly specs: Readonly<Partial<Record<ClassId, SpecId>>>; readonly talents: Readonly<Partial<Record<ClassId, TalentPicks>>> },
+  level: number,
+): Loadout {
+  const spec = activeSpec(cls, choices.specs, level);
+  const talents = activeTalents(cls, choices.talents[cls], level);
+  return { spec, talents, kit: kitFor(cls, spec, talents), passive: passiveOf(spec, talents) };
+}
 
 export const maxResourceFor = (cls: ClassId, level: number): number => {
   const r = CLASSES[cls].resource;

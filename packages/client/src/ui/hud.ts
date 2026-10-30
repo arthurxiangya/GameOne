@@ -63,7 +63,7 @@ export class Hud {
 
   /** Puts the class's skills on the buttons: icons, names, tooltips with real numbers, and lock labels. */
   setKit(cls: ClassId, kit: readonly SkillDef[], power: number, passive: Passive): void {
-    const key = `${cls}/${kit.map((s) => s.id).join()}/${Math.round(power)}/${passive.damage ?? 0}/${passive.healing ?? 0}`;
+    const key = `${cls}/${kit.map((s) => `${s.id}:${s.text.length}:${s.cooldown}:${s.cost}`).join()}/${Math.round(power)}/${passive.damage ?? 0}/${passive.healing ?? 0}`;
     if (key === this.lastKit) return;
     this.lastKit = key;
     const def = CLASSES[cls];

@@ -20,6 +20,7 @@ import {
   newStoryProgress,
   sanitizeName,
   specOf,
+  talentOf,
   type BountyProgress,
   type ClassId,
   type ChainProgress,
@@ -29,6 +30,7 @@ import {
   type PetState,
   type PlayerProgress,
   type SpecId,
+  type TalentPicks,
   type StepState,
   type StoryProgress,
   type TitleId,
@@ -49,6 +51,7 @@ export const progressFromRecord = (r: PlayerRecord): PlayerProgress =>
     name: r.name,
     cls: r.cls,
     specs: r.specs,
+    talents: r.talents,
     level: r.level,
     xp: r.xp,
     gold: r.gold,
@@ -102,6 +105,7 @@ export function parsePlayerRecord(data: unknown): PlayerRecord | null {
     // Heroes from before classes become Emberblades until they pick on the title screen.
     cls: isClassId(r.cls) ? r.cls : DEFAULT_CLASS,
     specs: parseSpecs(r.specs),
+    talents: parseTalents(r.talents),
     level: r.level,
     xp: r.xp,
     gold: r.gold,
@@ -231,4 +235,19 @@ function parseSpecs(v: unknown): Partial<Record<ClassId, SpecId>> {
     if (spec) specs[cls] = spec.id;
   }
   return specs;
+}
+
+/** Keeps only talents that exist, in the row they belong to, for their own class. */
+function parseTalents(v: unknown): Partial<Record<ClassId, TalentPicks>> {
+  const talents: Partial<Record<ClassId, TalentPicks>> = {};
+  if (!isRecord(v)) return talents;
+  for (const cls of CLASS_IDS) {
+    const raw = v[cls];
+    if (!Array.isArray(raw)) continue;
+    talents[cls] = [0, 1, 2, 3].map((row) => {
+      const found = talentOf(cls, typeof raw[row] === 'string' ? (raw[row] as string) : null);
+      return found && found.row === row ? found.talent.id : null;
+    });
+  }
+  return talents;
 }

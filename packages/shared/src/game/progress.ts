@@ -1,5 +1,5 @@
 import { emptyBountyProgress, type BountyProgress } from './bounties';
-import { DEFAULT_CLASS, type ClassId, type SpecId } from './classes';
+import { DEFAULT_CLASS, type ClassId, type SpecId, type TalentPicks } from './classes';
 import { STARTING_TONICS } from './economy';
 import type { MountId } from './mounts';
 import type { EggState, PetId, PetState } from './pets';
@@ -13,6 +13,8 @@ export interface PlayerProgress {
   cls: ClassId;
   /** The specialization chosen for each class, used from level 10. */
   specs: Partial<Record<ClassId, SpecId>>;
+  /** Talent picks for each class: one id (or null) per row. */
+  talents: Partial<Record<ClassId, TalentPicks>>;
   level: number;
   xp: number;
   gold: number;
@@ -63,6 +65,7 @@ export const newProgress = (name: string, cls: ClassId = DEFAULT_CLASS): PlayerP
   name,
   cls,
   specs: {},
+  talents: {},
   level: 1,
   xp: 0,
   gold: 0,
@@ -88,6 +91,7 @@ export const cloneProgress = (p: PlayerProgress): PlayerProgress => ({
   story: Object.fromEntries(Object.entries(p.story).map(([k, v]) => [k, { ...v }])) as StoryProgress,
   bounties: { day: p.bounties.day, ids: [...p.bounties.ids], counts: [...p.bounties.counts], done: [...p.bounties.done], seen: [...p.bounties.seen] },
   specs: { ...p.specs },
+  talents: Object.fromEntries(Object.entries(p.talents).map(([k, v]) => [k, [...v]])),
   titles: [...p.titles],
   mounts: [...p.mounts],
   pets: p.pets.map((x) => ({ ...x })),
