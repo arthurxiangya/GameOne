@@ -1,6 +1,7 @@
 import {
   ACTION_SERVICE,
   MONSTERS,
+  Mulberry32,
   NPC_INTERACT_RANGE,
   CLASSES,
   CLASS_CHANGE_RADIUS,
@@ -21,6 +22,7 @@ import {
   sanitizeIntent,
   stepPlayer,
   type ChainId,
+  type GearOp,
   type GeneratedWorld,
   type InputFrame,
   type Landmark,
@@ -51,6 +53,7 @@ import type { Calendar, Clock } from '../domain/ports';
 import { fail, ok, type Result } from '../domain/result';
 import { BountyService } from '../domain/services/bounty-service';
 import { CombatService, type CombatWorld } from '../domain/services/combat-service';
+import { GearService } from '../domain/services/gear-service';
 import { MonsterAi, type AiWorld } from '../domain/services/monster-ai';
 import { MountService } from '../domain/services/mount-service';
 import { PetService } from '../domain/services/pet-service';
@@ -72,6 +75,7 @@ export type PlayerCommand =
   | { readonly kind: 'title'; readonly title: TitleId | null }
   | { readonly kind: 'class'; readonly cls: ClassId; readonly spec: SpecId | null }
   | { readonly kind: 'talent'; readonly row: number; readonly pick: number | null }
+  | { readonly kind: 'gear'; readonly op: GearOp }
   | { readonly kind: 'mount'; readonly on: boolean }
   | { readonly kind: 'chooseMount'; readonly mount: MountId | null }
   | { readonly kind: 'choosePet'; readonly pet: PetId | null }
@@ -92,6 +96,11 @@ export interface GameWorldOptions {
   readonly boards?: LeaderboardSink;
   /** Whether heroes can duel (online). Single-player has nobody to duel. Defaults to true. */
   readonly duels?: boolean;
+  /**
+   * Loot rolls on its own stream, so a drop never shifts a fight's crits and spreads. Defaults
+   * to one seeded from the world.
+   */
+  readonly lootRng?: RandomSource;
 }
 
 const systemCalendar: Calendar = { today: () => dayNumber(Date.now()), iso: () => new Date().toISOString() };
@@ -147,6 +156,7 @@ export class GameWorld implements CombatWorld, AiWorld {
   private readonly bounties: BountyService;
   private readonly tracker: ProgressTracker;
   private readonly shop: ShopService;
+  private readonly gear: GearService;
   private readonly mounts: MountService;
   private readonly pets: PetService;
   private readonly calendar: Calendar;
@@ -176,6 +186,7 @@ export class GameWorld implements CombatWorld, AiWorld {
     this.mounts = new MountService(this.events, this.clock);
     this.tracker = new ProgressTracker(this.story, this.bounties, this.pets, this.calendar);
     this.shop = new ShopService(this.events, progression, this.pets);
+    this.gear = new GearService(this.events, options.lootRng ?? new Mulberry32((generated.seed ^ 0x6c0071) >>> 0));
     const host: ModeHost = {
       events: this.events,
       achievements: this.tracker,
@@ -203,7 +214,7 @@ export class GameWorld implements CombatWorld, AiWorld {
       !duels ? 'There is nobody to duel here.' : this.lanternNight.active ? 'Not during Lantern Night: the Lantern needs every blade.' : null,
     );
     this.modes = [this.emberRun, this.lanternNight, this.riftTrials, this.duels];
-    this.combat = new CombatService(this, rng, this.clock, this.events, progression, this.tracker);
+    this.combat = new CombatService(this, rng, this.clock, this.events, progression, this.tracker, this.gear);
     this.ai = new MonsterAi(this, this.combat, this.events, rng);
 
     for (const s of generated.monsterSpawns) {
@@ -330,6 +341,9 @@ export class GameWorld implements CombatWorld, AiWorld {
         break;
       case 'talent':
         result = this.chooseTalent(player, command.row, command.pick);
+        break;
+      case 'gear':
+        result = this.gearAction(player, command.op);
         break;
       case 'mount':
         result = command.on ? this.callMount(player) : this.mounts.dismiss(player);
@@ -467,6 +481,32 @@ export class GameWorld implements CombatWorld, AiWorld {
       c: 'good',
     });
     return ok();
+  }
+
+  /**
+   * Gear actions. Salvaging works anywhere; anything that changes what you wear waits until you
+   * are out of combat and outside a mode, like talents; the forge's work needs Smith Oda.
+   */
+  private gearAction(player: Player, op: GearOp): Result {
+    if (player.dead) return fail('You are defeated.');
+    if (op.kind === 'salvage') return this.gear.salvage(player, op.items);
+    const now = this.simTime;
+    if (now - player.lastHurtAt < OUT_OF_COMBAT_SECONDS || now - player.lastAttackAt < OUT_OF_COMBAT_SECONDS) return fail('Not while fighting.');
+    if (this.modes.some((mode) => mode.status(player) !== null)) return fail('Finish what you are doing first.');
+    if (op.kind === 'equip') return this.gear.equip(player, op.item);
+    if (op.kind === 'unequip') return this.gear.unequip(player, op.slot);
+    const smith = this.npcs.find((n) => n.services.includes('forge'));
+    if (!smith || Math.hypot(smith.x - player.body.x, smith.z - player.body.z) > NPC_INTERACT_RANGE + 0.5) {
+      return fail(`Visit ${smith?.name ?? 'the smith'} to do that.`);
+    }
+    switch (op.kind) {
+      case 'upgrade':
+        return this.gear.upgrade(player, op.item);
+      case 'reforge':
+        return this.gear.reforge(player, op.item, op.affix, op.stat);
+      case 'craft':
+        return this.gear.craft(player, op.slot);
+    }
   }
 
   /** A talent pick for the current class: out of combat, outside a mode, once its row is open. */
@@ -628,8 +668,8 @@ export class GameWorld implements CombatWorld, AiWorld {
         return this.story.talk(player, arg as ChainId, npc.id);
       case 'buyTonic':
         return this.shop.buyTonic(player);
-      case 'sharpen':
-        return this.shop.sharpen(player);
+      case 'buyWeapon':
+        return this.gear.buyWeapon(player);
       case 'buy':
         return this.shop.buy(player, arg as ShopItemId);
       case 'race':

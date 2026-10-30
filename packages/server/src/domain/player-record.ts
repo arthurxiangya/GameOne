@@ -1,12 +1,23 @@
 import {
+  BAG_SIZE,
   CHAINS,
   CLASS_IDS,
   DEFAULT_CLASS,
   EGG_HATCH_KILLS,
+  GEAR_SLOTS,
+  ILVL_CEILING,
+  LEGACY_ILVL_PER_TIER,
+  LEGACY_MAX_WEAPON_TIER,
+  LEGENDARIES,
   MAX_EGGS,
   MAX_LEVEL,
-  MAX_WEAPON_TIER,
   PET_MAX_LEVEL,
+  SET_IDS,
+  affixCount,
+  isAffixStat,
+  isGearSlot,
+  isLegendaryId,
+  isRarity,
   STEP_STATES,
   cloneProgress,
   emptyBountyProgress,
@@ -25,9 +36,13 @@ import {
   type ClassId,
   type ChainProgress,
   type EggState,
+  type Equipped,
+  type GearSlot,
+  type Item,
   type HeroRecords,
   type MountId,
   type PetState,
+  type SetId,
   type PlayerProgress,
   type SpecId,
   type TalentPicks,
@@ -56,7 +71,10 @@ export const progressFromRecord = (r: PlayerRecord): PlayerProgress =>
     xp: r.xp,
     gold: r.gold,
     tonics: r.tonics,
-    weapon: r.weapon,
+    gear: r.gear,
+    bag: r.bag,
+    embers: r.embers,
+    itemSeq: r.itemSeq,
     falls: r.falls,
     story: r.story,
     bounties: r.bounties,
@@ -91,7 +109,7 @@ export function parsePlayerRecord(data: unknown): PlayerRecord | null {
   const name = typeof r.name === 'string' ? sanitizeName(r.name) : null;
   if (typeof r.accountId !== 'string' || !name) return null;
   if (!intIn(r.level, 1, MAX_LEVEL) || !intIn(r.xp, 0, 1e9) || !intIn(r.gold, 0, 1e9) || !intIn(r.tonics, 0, 9999)) return null;
-  if (!intIn(r.weapon, 0, MAX_WEAPON_TIER) || !intIn(r.falls, 0, 1e9)) return null;
+  if (!intIn(r.falls, 0, 1e9)) return null;
   const titles = parseTitles(r.titles);
   const story = parseStory(r.story) ?? migrateLegacyQuest(r);
   const mounts = Array.isArray(r.mounts) ? [...new Set(r.mounts.filter(isMountId))] : [];
@@ -99,6 +117,7 @@ export function parsePlayerRecord(data: unknown): PlayerRecord | null {
   const title = isTitleId(r.title) && titles.includes(r.title) ? r.title : null;
   const pets = parsePets(r.pets);
   const owns = (pet: unknown): boolean => pets.some((x) => x.id === pet);
+  const items = parseItems(r);
   return {
     accountId: r.accountId,
     name,
@@ -110,7 +129,7 @@ export function parsePlayerRecord(data: unknown): PlayerRecord | null {
     xp: r.xp,
     gold: r.gold,
     tonics: r.tonics,
-    weapon: r.weapon,
+    ...items,
     falls: r.falls,
     story,
     bounties: parseBounties(r.bounties) ?? emptyBountyProgress(),
@@ -126,6 +145,43 @@ export function parsePlayerRecord(data: unknown): PlayerRecord | null {
     createdAt: typeof r.createdAt === 'string' ? r.createdAt : new Date(0).toISOString(),
     updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : new Date(0).toISOString(),
   };
+}
+
+/** One stored item, or null if anything about it is off. */
+function parseItem(v: unknown): Item | null {
+  if (!isRecord(v) || !intIn(v.id, 1, 1e9) || !isGearSlot(v.slot) || !isRarity(v.rarity)) return null;
+  if (!intIn(v.ilvl, 1, ILVL_CEILING) || !intIn(v.tier, 0, 2)) return null;
+  const set = SET_IDS.includes(v.set as SetId) ? (v.set as SetId) : null;
+  const legendary = isLegendaryId(v.legendary) ? v.legendary : null;
+  if (legendary && (v.rarity !== 'legendary' || LEGENDARIES[legendary].slot !== v.slot)) return null;
+  if (!Array.isArray(v.affixes) || !v.affixes.every(isAffixStat) || v.affixes.length !== affixCount(v.slot, v.rarity, set)) return null;
+  const reforged = intIn(v.reforged, -1, v.affixes.length - 1) ? v.reforged : -1;
+  return { id: v.id, slot: v.slot, rarity: v.rarity, ilvl: v.ilvl, tier: v.tier as 0 | 1 | 2, affixes: [...v.affixes], reforged, set, legendary };
+}
+
+/**
+ * Gear, bag, Embers and the item counter. Item ids must be unique and below the counter, and
+ * at most one legendary may be worn. Saves from before gear had a weapon tier (0–5): it becomes
+ * a weapon of item level 20 × tier, which gives the same Power, so nobody gets weaker.
+ */
+function parseItems(r: Record<string, unknown>): { gear: Equipped; bag: Item[]; embers: number; itemSeq: number } {
+  const seen = new Set<number>();
+  const fresh = (item: Item | null): item is Item => item !== null && !seen.has(item.id) && (seen.add(item.id), true);
+  const gear: Partial<Record<GearSlot, Item>> = {};
+  if (isRecord(r.gear)) {
+    for (const slot of GEAR_SLOTS) {
+      const item = parseItem(r.gear[slot]);
+      if (!fresh(item) || item.slot !== slot) continue;
+      if (item.legendary && Object.values(gear).some((g) => g?.legendary)) continue;
+      gear[slot] = item;
+    }
+  }
+  const bag = Array.isArray(r.bag) ? r.bag.map(parseItem).filter(fresh).slice(0, BAG_SIZE) : [];
+  let itemSeq = Math.max(intIn(r.itemSeq, 1, 1e9) ? r.itemSeq : 1, ...[...seen].map((id) => id + 1));
+  if (!('gear' in r) && intIn(r.weapon, 1, LEGACY_MAX_WEAPON_TIER)) {
+    gear.weapon = { id: itemSeq++, slot: 'weapon', rarity: 'common', ilvl: r.weapon * LEGACY_ILVL_PER_TIER, tier: 0, affixes: [], reforged: -1, set: null, legendary: null };
+  }
+  return { gear, bag, embers: intIn(r.embers, 0, 1e9) ? r.embers : 0, itemSeq };
 }
 
 /**

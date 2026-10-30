@@ -8,8 +8,7 @@ import {
   TALENT_ROW_THEMES,
   describeSkill,
   kitFor,
-  loadout,
-  powerFor,
+  heroStats,
   type ClassId,
   type PlayerProgress,
   type Role,
@@ -65,9 +64,11 @@ export class ClassPanel {
     const cls = this.viewing ?? p.cls;
     const def = CLASSES[cls];
     const mine = cls === p.cls;
-    const gear = loadout(cls, p, p.level);
-    const power = powerFor(p.level, p.weapon);
-    const passive = gear.passive;
+    // Your own numbers, with gear: for another class, what you would have as one.
+    const stats = heroStats({ ...p, cls }, p.level);
+    const gear = stats.loadout;
+    const power = stats.power;
+    const passive = stats.passive;
 
     const picker = el('div', 'chips cls-tabs');
     for (const id of CLASS_IDS) {

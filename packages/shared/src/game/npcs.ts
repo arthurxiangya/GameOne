@@ -7,14 +7,14 @@ export type NpcService = 'forge' | 'marks' | 'bounties' | 'race' | 'rift';
  * Everything a hero can do with a character. `greet` opens a conversation (it counts for
  * bounties that ask you to visit people); the story actions name a chain, `buy` names an item.
  */
-export type NpcAction = 'greet' | 'accept' | 'turnIn' | 'talk' | 'buyTonic' | 'sharpen' | 'buy' | 'race' | 'rift';
+export type NpcAction = 'greet' | 'accept' | 'turnIn' | 'talk' | 'buyTonic' | 'buyWeapon' | 'buy' | 'race' | 'rift';
 
-export const NPC_ACTIONS: readonly NpcAction[] = ['greet', 'accept', 'turnIn', 'talk', 'buyTonic', 'sharpen', 'buy', 'race', 'rift'];
+export const NPC_ACTIONS: readonly NpcAction[] = ['greet', 'accept', 'turnIn', 'talk', 'buyTonic', 'buyWeapon', 'buy', 'race', 'rift'];
 
 /** Actions that belong to a service only that service's characters provide. */
 export const ACTION_SERVICE: Readonly<Partial<Record<NpcAction, NpcService>>> = {
   buyTonic: 'forge',
-  sharpen: 'forge',
+  buyWeapon: 'forge',
   buy: 'marks',
   race: 'race',
   rift: 'rift',

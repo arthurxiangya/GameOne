@@ -1,6 +1,7 @@
 import { emptyBountyProgress, type BountyProgress } from './bounties';
 import { DEFAULT_CLASS, type ClassId, type SpecId, type TalentPicks } from './classes';
 import { STARTING_TONICS } from './economy';
+import type { Equipped, Item } from './gear';
 import type { MountId } from './mounts';
 import type { EggState, PetId, PetState } from './pets';
 import { newStoryProgress, type StoryProgress } from './story';
@@ -19,7 +20,14 @@ export interface PlayerProgress {
   xp: number;
   gold: number;
   tonics: number;
-  weapon: number;
+  /** What the hero wears, one item per slot. Replaced (never edited) when it changes. */
+  gear: Equipped;
+  /** Items carried, up to BAG_SIZE. */
+  bag: Item[];
+  /** Salvaged from items; spent at Smith Oda's forge. */
+  embers: number;
+  /** The id the next new item gets. */
+  itemSeq: number;
   falls: number;
   story: StoryProgress;
   bounties: BountyProgress;
@@ -70,7 +78,10 @@ export const newProgress = (name: string, cls: ClassId = DEFAULT_CLASS): PlayerP
   xp: 0,
   gold: 0,
   tonics: STARTING_TONICS,
-  weapon: 0,
+  gear: {},
+  bag: [],
+  embers: 0,
+  itemSeq: 1,
   falls: 0,
   story: newStoryProgress(),
   bounties: emptyBountyProgress(),
@@ -91,6 +102,9 @@ export const cloneProgress = (p: PlayerProgress): PlayerProgress => ({
   story: Object.fromEntries(Object.entries(p.story).map(([k, v]) => [k, { ...v }])) as StoryProgress,
   bounties: { day: p.bounties.day, ids: [...p.bounties.ids], counts: [...p.bounties.counts], done: [...p.bounties.done], seen: [...p.bounties.seen] },
   specs: { ...p.specs },
+  // Items are never edited in place, so copying the containers is enough.
+  gear: { ...p.gear },
+  bag: [...p.bag],
   talents: Object.fromEntries(Object.entries(p.talents).map(([k, v]) => [k, [...v]])),
   titles: [...p.titles],
   mounts: [...p.mounts],

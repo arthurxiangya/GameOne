@@ -1,8 +1,9 @@
 import {
   CHAINS,
   MAX_EGGS,
+  BAG_SIZE,
+  FORGE,
   RIFT,
-  MAX_WEAPON_TIER,
   SHOP_ITEMS,
   SHOP_ITEM_IDS,
   TITLES,
@@ -16,7 +17,7 @@ import {
   npcName,
   objectiveText,
   priceText,
-  sharpenCost,
+  weaponPrice,
   type Medal,
   type NpcAction,
   type NpcDef,
@@ -42,6 +43,8 @@ export interface TopicAction {
   readonly send?: { readonly action: NpcAction; readonly arg: string | null };
   /** Close the dialog after choosing (default true unless the action keeps a shop open). */
   readonly close?: boolean;
+  /** Opens a panel on this client instead of asking the server. */
+  readonly open?: 'gear';
 }
 
 export interface Topic {
@@ -116,16 +119,18 @@ function storyTopic(chain: StoryChain, npc: NpcId, p: PlayerProgress): Topic | n
 }
 
 function forgeTopic(p: PlayerProgress): Topic {
-  const cost = sharpenCost(p.weapon);
-  const maxed = p.weapon >= MAX_WEAPON_TIER;
+  const price = weaponPrice(p.level);
+  const full = p.bag.length >= BAG_SIZE;
   return {
     key: 'forge', label: 'The forge', mark: '', title: 'Oda’s Forge',
-    paragraphs: [`Steel and tonics, fair prices. Your blade is at +${p.weapon * 4} attack. You carry ${p.gold} gold.`],
+    paragraphs: [
+      `Steel and tonics, fair prices. You carry ${p.gold} gold, ${p.embers} Embers and ${p.marks} Ember Mark${p.marks === 1 ? '' : 's'}.`,
+      { dim: `Salvage what you don't wear for Embers. Here I upgrade an item (+5 item level, ${FORGE.upgrade.embers} Embers), reforge an affix (${FORGE.reforge.embers} Embers + ${FORGE.reforge.marks} Mark) or craft a rare for the slot you want (${FORGE.craft.embers} Embers + ${FORGE.craft.marks} Marks).` },
+    ],
     actions: [
       { label: `Buy a healing tonic · ${TONIC_PRICE} gold`, primary: true, disabled: p.gold < TONIC_PRICE, send: { action: 'buyTonic', arg: null }, close: false },
-      maxed
-        ? { label: 'Your blade is as sharp as it gets', disabled: true, close: false }
-        : { label: `Sharpen blade (+4 attack) · ${cost} gold`, disabled: p.gold < cost, send: { action: 'sharpen', arg: null }, close: false },
+      { label: `Buy a weapon (item level ${5 * p.level}) · ${full ? 'bag full' : `${price} gold`}`, disabled: full || p.gold < price, send: { action: 'buyWeapon', arg: null }, close: false },
+      { label: 'Upgrade, reforge and craft (opens your gear)', open: 'gear' },
       { label: 'Leave' },
     ],
   };

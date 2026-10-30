@@ -22,8 +22,8 @@ export class FakeCalendar implements Calendar {
   }
 }
 
-export const makeWorld = (rng: RandomSource = constantRandom(), calendar: Calendar = new FakeCalendar()): GameWorld =>
-  new GameWorld({ generated: sharedRealm(), rng, dayLengthSeconds: 480, calendar });
+export const makeWorld = (rng: RandomSource = constantRandom(), calendar: Calendar = new FakeCalendar(), lootRng?: RandomSource): GameWorld =>
+  new GameWorld({ generated: sharedRealm(), rng, dayLengthSeconds: 480, calendar, lootRng });
 
 /** Stands a hero next to a character, ready to talk. */
 export function standAt(player: Player, at: { readonly x: number; readonly z: number }, offset = 1.2): void {

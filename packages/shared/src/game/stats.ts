@@ -5,7 +5,8 @@ export const CRIT_CHANCE = 0.15;
 export const CRIT_MULTIPLIER = 1.6;
 
 export const maxHpFor = (level: number): number => 90 + 24 * (level - 1);
-export const attackFor = (level: number, weaponTier: number): number => 10 + 3.4 * (level - 1) + 4 * weaponTier;
+/** Power before gear: P₀ = 10 + 3.4(L − 1). */
+export const basePower = (level: number): number => 10 + 3.4 * (level - 1);
 
 /** Experience needed to advance from `level` to `level + 1`. */
 export const xpToNext = (level: number): number => Math.round(30 * level * (1 + 0.25 * level));

@@ -41,6 +41,8 @@ export interface StatusDef {
   readonly dot?: number;
   /** Total healing over the duration, as a multiple of the caster's Power. */
   readonly hot?: number;
+  /** Heroes: this share of each monster blow (after armour) is dealt back to the attacker. */
+  readonly reflect?: number;
 }
 
 /**
@@ -80,7 +82,7 @@ export interface SkillDef {
   readonly effects: readonly SkillEffect[];
   /** The caster heals for this share of the damage the skill deals. */
   readonly leech: number;
-  /** Enemy skills with a radius: share of the damage that splashes onto everything else near the target. */
+  /** Enemy skills with a radius: share of the damage that splashes onto everything else near the target (0: statuses only). */
   readonly splash: number;
   /** Extra crit chance on this skill. */
   readonly crit: number;

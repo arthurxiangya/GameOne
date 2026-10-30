@@ -7,6 +7,7 @@ import type { NpcAction, NpcId } from '../game/npcs';
 import type { PlayerProgress } from '../game/progress';
 import type { SkillId } from '../game/skills';
 import type { ClassId, SpecId } from '../game/classes';
+import type { AffixStat, GearSlot } from '../game/gear';
 import type { TitleId } from '../game/titles';
 
 /**
@@ -26,6 +27,19 @@ export interface InputFrame {
   readonly swim: boolean;
 }
 
+/**
+ * Gear actions. Items are named by their id. Equip, unequip and salvage work anywhere out of
+ * combat; upgrade, reforge and craft need Smith Oda.
+ */
+export type GearOp =
+  | { readonly kind: 'equip'; readonly item: number }
+  | { readonly kind: 'unequip'; readonly slot: GearSlot }
+  | { readonly kind: 'salvage'; readonly items: readonly number[] }
+  | { readonly kind: 'upgrade'; readonly item: number }
+  /** Turn affix number `affix` into `stat`. */
+  | { readonly kind: 'reforge'; readonly item: number; readonly affix: number; readonly stat: AffixStat }
+  | { readonly kind: 'craft'; readonly slot: GearSlot };
+
 export type ClientMessage =
   /** `cls` is the class chosen on the title screen; heroes always enter in town, where class changes are allowed. */
   | { readonly t: 'hello'; readonly v: number; readonly token: string; readonly name: string; readonly cls: ClassId }
@@ -39,6 +53,8 @@ export type ClientMessage =
   | { readonly t: 'class'; readonly cls: ClassId; readonly spec: SpecId | null }
   /** Pick a talent for your current class: `pick` 0–2 in `row` 0–3, or null to clear (out of combat). */
   | { readonly t: 'talent'; readonly row: number; readonly pick: number | null }
+  /** Wear, store, salvage or (at Smith Oda's forge) upgrade, reforge and craft gear. */
+  | { readonly t: 'gear'; readonly op: GearOp }
   /** Call your mount (`on`), or get off it. */
   | { readonly t: 'mount'; readonly on: boolean }
   /** Choose which owned mount R calls, or which pet follows you (null for none). */

@@ -1,14 +1,15 @@
 import {
   CLASSES,
-  classArmor,
-  classMaxHp,
   createBody,
-  loadout,
+  heroStats,
   maxResourceFor,
-  powerFor,
   type ClassDef,
   type ClassId,
+  type Equipped,
+  type GearProc,
+  type HeroStats,
   type InputFrame,
+  type LegendaryDef,
   type Loadout,
   type LandmarkId,
   type MountId,
@@ -62,8 +63,15 @@ export class Player {
   blessedUntil = 0;
   /** The rift party the hero fights with, or null. */
   party: number | null = null;
-  /** The last loadout, reused while class, level, spec and talent picks are unchanged (picks are replaced, never edited). */
-  private memo: { cls: ClassId; level: number; spec: SpecId | undefined; picks: TalentPicks | undefined; value: Loadout } | null = null;
+  /**
+   * The last stats, reused while class, level, spec, talent picks and gear are unchanged (picks
+   * and gear are replaced, never edited, so comparing references is enough).
+   */
+  private memo: { cls: ClassId; level: number; duel: boolean; spec: SpecId | undefined; picks: TalentPicks | undefined; gear: Equipped; value: HeroStats } | null = null;
+  /** Uses of the legendary's echo skill so far (Pip's Lucky Quiver counts Quick Shots). */
+  echoCount = 0;
+  /** Simulation time when a low-health shield (Frostward) can fire again. */
+  wardReadyAt = 0;
   /** In a duel, both heroes fight at the lower level: their health, resource and Power use this. */
   duelLevel: number | null = null;
 
@@ -101,19 +109,26 @@ export class Player {
   }
 
   /**
-   * Spec, talents, skills and passive at the stat level. In a duel both heroes fight at the lower
-   * level, so a spec or talent row the lower hero hasn't reached is off for both.
+   * Class, spec, talents and gear at the stat level. In a duel both heroes fight at the lower
+   * level, so a spec or talent row the lower hero hasn't reached is off for both, and gear counts
+   * at no more than that level's item level.
    */
-  get loadout(): Loadout {
-    const cls = this.progress.cls;
+  get stats(): HeroStats {
+    const p = this.progress;
+    const cls = p.cls;
     const level = this.statLevel;
-    const spec = this.progress.specs[cls];
-    const picks = this.progress.talents[cls];
+    const duel = this.duelLevel !== null;
+    const spec = p.specs[cls];
+    const picks = p.talents[cls];
     const m = this.memo;
-    if (m && m.cls === cls && m.level === level && m.spec === spec && m.picks === picks) return m.value;
-    const value = loadout(cls, this.progress, level);
-    this.memo = { cls, level, spec, picks, value };
+    if (m && m.cls === cls && m.level === level && m.duel === duel && m.spec === spec && m.picks === picks && m.gear === p.gear) return m.value;
+    const value = heroStats(p, level, duel);
+    this.memo = { cls, level, duel, spec, picks, gear: p.gear, value };
     return value;
+  }
+
+  get loadout(): Loadout {
+    return this.stats.loadout;
   }
 
   get spec(): SpecDef | null {
@@ -124,18 +139,28 @@ export class Player {
     return this.loadout.talents;
   }
 
+  /** Spec, talents, legendary and gear passives together. */
   get passive(): Passive {
-    return this.loadout.passive;
+    return this.stats.passive;
   }
 
-  /** The four class skills, with the spec's and talents' changes. */
+  /** The four class skills, with the spec's, talents' and legendary's changes. */
   get kit(): readonly SkillDef[] {
     return this.loadout.kit;
   }
 
+  /** The legendary worn, when its spec is active. */
+  get legendary(): LegendaryDef | null {
+    return this.stats.gear.legendary && this.loadout.legendary ? this.stats.gear.legendary : null;
+  }
+
+  /** Set bonuses that need the engine: Frostward, Emberfall, Bellsong. */
+  get procs(): readonly GearProc[] {
+    return this.stats.gear.procs;
+  }
+
   get maxHp(): number {
-    const l = this.loadout;
-    return classMaxHp(this.progress.cls, this.statLevel, l.spec, l.talents);
+    return this.stats.maxHp;
   }
 
   /** Size of the class resource pool. */
@@ -145,12 +170,11 @@ export class Player {
 
   /** Power: every skill's numbers scale with it. */
   get attack(): number {
-    return powerFor(this.statLevel, this.progress.weapon);
+    return this.stats.power;
   }
 
   get armor(): number {
-    const l = this.loadout;
-    return classArmor(this.progress.cls, l.spec, l.talents);
+    return this.stats.armor;
   }
 
   cooldown(id: SkillId): number {
@@ -166,6 +190,14 @@ export class Player {
     this.shield = 0;
     this.hp = Math.max(1, Math.round(this.maxHp * share));
     this.mp = this.classDef.resource.startFull ? this.maxMp : 0;
+  }
+
+  /** Changes gear (`change` replaces `progress.gear`), keeping the same share of health. */
+  changeGear(change: () => void): void {
+    const share = this.hp / this.maxHp;
+    change();
+    this.hp = Math.max(1, Math.min(this.maxHp, Math.round(this.maxHp * share)));
+    this.echoCount = 0;
   }
 
   touchProgress(): void {

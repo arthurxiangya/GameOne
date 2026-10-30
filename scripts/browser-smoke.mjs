@@ -197,6 +197,16 @@ async function preview(browser, dir) {
     check(classes, 'the class panel shows five classes and your four skills');
     check(((await solo.page.getAttribute('#sk0', 'aria-label')) ?? '').startsWith('Slash'), 'the skill bar shows the chosen class (Emberblade: Slash)');
     await solo.page.keyboard.press('Escape');
+    await solo.page.keyboard.press('i');
+    const gearPanel = await solo.page
+      .waitForFunction(
+        () => !document.getElementById('gear')?.hidden && document.querySelectorAll('#gBody .j-row').length >= 6 && /Power \d/.test(document.getElementById('gBody')?.textContent ?? ''),
+        null,
+        { timeout: 5000 },
+      )
+      .then(() => true, () => false);
+    check(gearPanel, 'the gear panel shows six slots and your Power');
+    await solo.page.keyboard.press('Escape');
 
     // The Ember Run: walk to the start line beside Pip, start a run, see the countdown and the timer, give up.
     await solo.page.keyboard.down('w');
