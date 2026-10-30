@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { DUEL, SIM_DT, bountiesForDay, eloAfter, maxHpFor, type InputFrame } from '@lanternwood/shared';
+import { DUEL, SIM_DT, bountiesForDay, classMaxHp, eloAfter, type InputFrame } from '@lanternwood/shared';
 import { GameWorld } from '../src/application/game-world';
 import { Leaderboards } from '../src/application/leaderboards';
 import { nullLogger } from '../src/application/ports';
@@ -27,8 +27,8 @@ function startDuel(world: GameWorld, a: Player, b: Player): void {
 }
 
 const swing = (world: GameWorld, p: Player) => {
-  p.cooldowns.strike = 0;
-  return world.execute(p.id, { kind: 'skill', skill: 'strike', target: null });
+  p.cooldowns.clear();
+  return world.execute(p.id, { kind: 'skill', skill: 'slash', target: null });
 };
 
 describe('Duel Ring', () => {
@@ -37,7 +37,7 @@ describe('Duel Ring', () => {
     const strong = spawnHero(world, 'Strong', 15);
     const weak = spawnHero(world, 'Weak', 4);
     startDuel(world, strong, weak);
-    assert.equal(strong.maxHp, maxHpFor(4), 'level-matched');
+    assert.equal(strong.maxHp, classMaxHp('emberblade', 4, null), 'level-matched');
     assert.equal(swing(world, strong).ok, false, 'no hitting during the countdown');
     const frame: InputFrame = { seq: 1, fwd: 1, strafe: 0, yaw: 0, jump: false, swim: false };
     world.queueInput(weak.id, [frame]);

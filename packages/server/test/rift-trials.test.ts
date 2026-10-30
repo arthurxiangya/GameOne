@@ -32,8 +32,8 @@ function clearWave(world: GameWorld, hero: Player): void {
   for (const m of [...world.monsters()].filter((x) => x.party === hero.party && x.alive)) {
     standNextTo(hero, m);
     m.hp = 1;
-    hero.cooldowns.strike = 0;
-    world.execute(hero.id, { kind: 'skill', skill: 'strike', target: m.id });
+    hero.cooldowns.clear();
+    world.execute(hero.id, { kind: 'skill', skill: 'slash', target: m.id });
   }
 }
 
@@ -72,7 +72,7 @@ describe('Rift Trials', () => {
     assert.ok(m, 'wave 1 is up');
     standNextTo(outsider, m);
     outsider.lastAttackAt = -100;
-    world.execute(outsider.id, { kind: 'skill', skill: 'strike', target: m.id });
+    world.execute(outsider.id, { kind: 'skill', skill: 'slash', target: m.id });
     assert.equal(m.hp, m.maxHp, 'an outsider cannot hit it');
     seconds(world, 3);
     assert.equal(outsider.hp, outsider.maxHp, 'and it does not attack outsiders');
@@ -90,8 +90,8 @@ describe('Rift Trials', () => {
         const lord = [...world.monsters()].find((x) => x.type === 'riftlord')!;
         standNextTo(hero, lord);
         lord.hp = lord.maxHp * 0.5;
-        hero.cooldowns.strike = 0;
-        world.execute(hero.id, { kind: 'skill', skill: 'strike', target: lord.id });
+        hero.cooldowns.clear();
+        world.execute(hero.id, { kind: 'skill', skill: 'slash', target: lord.id });
         assert.ok([...world.monsters()].some((x) => x.type === 'wisp' && x.party === hero.party), 'the Lord called wisps');
       }
       clearWave(world, hero);

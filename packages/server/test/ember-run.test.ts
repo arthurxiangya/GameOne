@@ -88,7 +88,9 @@ describe('Ember Run', () => {
     hero.progress.mounts.push('strider');
     hero.progress.mount = 'strider';
     startRun(world, hero);
-    assert.equal(world.execute(hero.id, { kind: 'skill', skill: 'ring', target: null }).ok, false);
+    hero.mp = 100;
+    const inferno = world.execute(hero.id, { kind: 'skill', skill: 'inferno', target: null });
+    assert.match(inferno.ok ? '' : inferno.error, /No fighting/);
     assert.equal(world.execute(hero.id, { kind: 'mount', on: true }).ok, false);
     hero.hp = 10;
     assert.ok(world.execute(hero.id, { kind: 'skill', skill: 'tonic', target: null }).ok, 'tonics still work');

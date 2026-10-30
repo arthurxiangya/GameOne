@@ -1,17 +1,27 @@
 import {
-  SKILL_IDS,
-  attackFor,
+  CLASSES,
+  activeSpec,
+  classArmor,
+  classMaxHp,
   createBody,
-  maxHpFor,
-  maxMpFor,
+  kitFor,
+  maxResourceFor,
+  passiveOf,
+  powerFor,
+  type ClassDef,
+  type ClassId,
   type InputFrame,
   type LandmarkId,
   type MountId,
   type PhysicsBody,
+  type Passive,
   type PlayerProgress,
+  type SkillDef,
   type SkillId,
+  type SpecDef,
   type Vec3,
 } from '@lanternwood/shared';
+import { StatusList } from '../statuses';
 
 /** A connected hero inside the simulation. */
 export class Player {
@@ -19,11 +29,17 @@ export class Player {
   /** Facing direction in radians (0 = +z). */
   yaw = Math.PI;
   hp: number;
+  /** The class resource: Resolve, Mana, Focus or Heat. */
   mp: number;
   dead = false;
   lastHurtAt = Number.NEGATIVE_INFINITY;
   lastAttackAt = Number.NEGATIVE_INFINITY;
-  readonly cooldowns: Record<SkillId, number>;
+  /** Seconds until each skill is ready again; missing means ready. */
+  readonly cooldowns = new Map<SkillId, number>();
+  readonly statuses = new StatusList();
+  /** Damage the current ward still absorbs, and when it fades. */
+  shield = 0;
+  shieldUntil = 0;
 
   /** Movement frames waiting to be simulated, in arrival order. */
   readonly inputQueue: InputFrame[] = [];
@@ -44,7 +60,7 @@ export class Player {
   blessedUntil = 0;
   /** The rift party the hero fights with, or null. */
   party: number | null = null;
-  /** In a duel, both heroes fight at the lower level: their health, mana and attack use this. */
+  /** In a duel, both heroes fight at the lower level: their health, resource and Power use this. */
   duelLevel: number | null = null;
 
   constructor(
@@ -56,8 +72,7 @@ export class Player {
   ) {
     this.body = createBody(spawn.x, spawn.y, spawn.z);
     this.hp = this.maxHp;
-    this.mp = this.maxMp;
-    this.cooldowns = Object.fromEntries(SKILL_IDS.map((id) => [id, 0])) as Record<SkillId, number>;
+    this.mp = this.classDef.resource.startFull ? this.maxMp : 0;
   }
 
   get name(): string {
@@ -73,25 +88,69 @@ export class Player {
     return this.duelLevel ?? this.progress.level;
   }
 
+  get cls(): ClassId {
+    return this.progress.cls;
+  }
+
+  get classDef(): ClassDef {
+    return CLASSES[this.progress.cls];
+  }
+
+  /** The specialization in use: chosen for this class, from level 10 (by real level, not a duel's). */
+  get spec(): SpecDef | null {
+    return activeSpec(this.progress.cls, this.progress.specs, this.progress.level);
+  }
+
+  get passive(): Passive {
+    return passiveOf(this.spec);
+  }
+
+  /** The four class skills, with the spec's changes. */
+  get kit(): readonly SkillDef[] {
+    return kitFor(this.progress.cls, this.spec);
+  }
+
   get maxHp(): number {
-    return maxHpFor(this.statLevel);
+    return classMaxHp(this.progress.cls, this.statLevel, this.spec);
   }
 
+  /** Size of the class resource pool. */
   get maxMp(): number {
-    return maxMpFor(this.statLevel);
+    return maxResourceFor(this.progress.cls, this.statLevel);
   }
 
+  /** Power: every skill's numbers scale with it. */
   get attack(): number {
-    return attackFor(this.statLevel, this.progress.weapon);
+    return powerFor(this.statLevel, this.progress.weapon);
+  }
+
+  get armor(): number {
+    return classArmor(this.progress.cls, this.spec);
+  }
+
+  cooldown(id: SkillId): number {
+    return this.cooldowns.get(id) ?? 0;
+  }
+
+  /** Changes class and spec (`change` edits progress): fresh cooldowns, statuses and resource, same share of health. */
+  switchClass(change: () => void): void {
+    const share = this.hp / this.maxHp;
+    change();
+    this.cooldowns.clear();
+    this.statuses.clear();
+    this.shield = 0;
+    this.hp = Math.max(1, Math.round(this.maxHp * share));
+    this.mp = this.classDef.resource.startFull ? this.maxMp : 0;
   }
 
   touchProgress(): void {
     this.progressDirty = true;
   }
 
+  /** Full health; pools that start full are refilled, the others (Resolve, Heat) are kept. */
   restoreVitals(): void {
     this.hp = this.maxHp;
-    this.mp = this.maxMp;
+    this.mp = this.classDef.resource.startFull ? this.maxMp : Math.min(this.mp, this.maxMp);
   }
 
   /** Back on foot, and any mount call cancelled. Returns true if anything changed. */

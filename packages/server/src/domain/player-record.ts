@@ -1,5 +1,7 @@
 import {
   CHAINS,
+  CLASS_IDS,
+  DEFAULT_CLASS,
   EGG_HATCH_KILLS,
   MAX_EGGS,
   MAX_LEVEL,
@@ -8,6 +10,7 @@ import {
   STEP_STATES,
   cloneProgress,
   emptyBountyProgress,
+  isClassId,
   isMountId,
   isPetId,
   newRecords,
@@ -16,13 +19,16 @@ import {
   newProgress,
   newStoryProgress,
   sanitizeName,
+  specOf,
   type BountyProgress,
+  type ClassId,
   type ChainProgress,
   type EggState,
   type HeroRecords,
   type MountId,
   type PetState,
   type PlayerProgress,
+  type SpecId,
   type StepState,
   type StoryProgress,
   type TitleId,
@@ -41,6 +47,8 @@ export const newPlayerRecord = (accountId: string, name: string, isoTime: string
 export const progressFromRecord = (r: PlayerRecord): PlayerProgress =>
   cloneProgress({
     name: r.name,
+    cls: r.cls,
+    specs: r.specs,
     level: r.level,
     xp: r.xp,
     gold: r.gold,
@@ -91,6 +99,9 @@ export function parsePlayerRecord(data: unknown): PlayerRecord | null {
   return {
     accountId: r.accountId,
     name,
+    // Heroes from before classes become Emberblades until they pick on the title screen.
+    cls: isClassId(r.cls) ? r.cls : DEFAULT_CLASS,
+    specs: parseSpecs(r.specs),
     level: r.level,
     xp: r.xp,
     gold: r.gold,
@@ -209,4 +220,15 @@ function parseBounties(v: unknown): BountyProgress | null {
   const done = Array.isArray(v.done) && v.done.every((d) => typeof d === 'boolean') ? (v.done as boolean[]) : null;
   if (!ids || !seen || !counts || !done || counts.length !== ids.length || done.length !== ids.length) return null;
   return { day: v.day as number, ids: [...ids], counts: [...counts], done: [...done], seen: [...seen] };
+}
+
+/** Keeps only specs that belong to their class. */
+function parseSpecs(v: unknown): Partial<Record<ClassId, SpecId>> {
+  const specs: Partial<Record<ClassId, SpecId>> = {};
+  if (!isRecord(v)) return specs;
+  for (const cls of CLASS_IDS) {
+    const spec = specOf(cls, v[cls] as SpecId);
+    if (spec) specs[cls] = spec.id;
+  }
+  return specs;
 }

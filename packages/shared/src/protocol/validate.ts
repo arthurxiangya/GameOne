@@ -2,7 +2,7 @@ import { isShopItemId } from '../game/economy';
 import { isMountId } from '../game/mounts';
 import { isPetId } from '../game/pets';
 import { isNpcAction, isNpcId } from '../game/npcs';
-import { isSkillId } from '../game/skills';
+import { isClassId, isSkillId, specOf } from '../game/classes';
 import { isChainId } from '../game/story';
 import { isTitleId, type TitleId } from '../game/titles';
 import { MAX_INPUT_FRAMES, TOKEN_PATTERN } from './limits';
@@ -41,7 +41,8 @@ export function parseClientMessage(data: unknown): ParseResult {
       if (typeof data.name !== 'string') return fail('Invalid name');
       const name = sanitizeName(data.name);
       if (!name) return fail('Names need 2–14 letters or numbers');
-      return okMsg({ t: 'hello', v: data.v as number, token: data.token, name });
+      if (!isClassId(data.cls)) return fail('Choose a class');
+      return okMsg({ t: 'hello', v: data.v as number, token: data.token, name, cls: data.cls });
     }
     case 'input': {
       if (!Array.isArray(data.frames) || data.frames.length === 0 || data.frames.length > MAX_INPUT_FRAMES) return fail('Invalid input batch');
@@ -67,6 +68,12 @@ export function parseClientMessage(data: unknown): ParseResult {
       if (data.action === 'buy' && !isShopItemId(arg)) return fail('Unknown item');
       if (!story && data.action !== 'buy' && arg !== null) return fail('Unexpected argument');
       return okMsg({ t: 'npc', npc: data.npc, action: data.action, arg: arg as string | null });
+    }
+    case 'class': {
+      if (!isClassId(data.cls)) return fail('Unknown class');
+      const spec = data.spec === null ? null : specOf(data.cls, data.spec as never);
+      if (data.spec !== null && !spec) return fail('Unknown specialization');
+      return okMsg({ t: 'class', cls: data.cls, spec: spec?.id ?? null });
     }
     case 'title': {
       if (data.title !== null && !isTitleId(data.title)) return fail('Unknown title');

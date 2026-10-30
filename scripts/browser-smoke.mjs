@@ -186,6 +186,17 @@ async function preview(browser, dir) {
       .then(() => true, () => false);
     check(stable, 'the stable lists every mount and pet');
     await solo.page.keyboard.press('Escape');
+    await solo.page.keyboard.press('c');
+    const classes = await solo.page
+      .waitForFunction(
+        () => !document.getElementById('classes')?.hidden && document.querySelectorAll('#cBody .cls-tabs .chip').length === 5 && document.querySelectorAll('#cBody .skill-row').length === 4,
+        null,
+        { timeout: 5000 },
+      )
+      .then(() => true, () => false);
+    check(classes, 'the class panel shows five classes and your four skills');
+    check(((await solo.page.getAttribute('#sk0', 'aria-label')) ?? '').startsWith('Slash'), 'the skill bar shows the chosen class (Emberblade: Slash)');
+    await solo.page.keyboard.press('Escape');
 
     // The Ember Run: walk to the start line beside Pip, start a run, see the countdown and the timer, give up.
     await solo.page.keyboard.down('w');

@@ -4,7 +4,7 @@ import type { MonsterType } from './monsters';
 export type PetId = 'fox' | 'frog' | 'boarlet' | 'scuttle' | 'sprite' | 'moth' | 'mote';
 
 /** What a pet improves. Every bonus is a fraction (0.1 = +10%). */
-export type PetBonus = 'gold' | 'mana' | 'tonicHeal' | 'tonicDrops' | 'mend' | 'xp';
+export type PetBonus = 'gold' | 'mana' | 'tonicHeal' | 'tonicDrops' | 'healing' | 'xp';
 
 export interface PetDef {
   readonly name: string;
@@ -18,10 +18,10 @@ export interface PetDef {
 
 export const PETS: Readonly<Record<PetId, PetDef>> = {
   fox: { name: 'Ember Fox', eggFrom: 'puffcap', how: 'Egg from Puffcaps in Sunmeadow', bonus: { gold: 0.1 }, describe: 'gold from monsters' },
-  frog: { name: 'Reed Frogling', eggFrom: 'toad', how: 'Egg from Bog Toads in Reedmere', bonus: { mana: 0.15 }, describe: 'mana regeneration' },
+  frog: { name: 'Reed Frogling', eggFrom: 'toad', how: 'Egg from Bog Toads in Reedmere', bonus: { mana: 0.15 }, describe: 'resource regeneration' },
   boarlet: { name: 'Acorn Boarlet', eggFrom: 'boar', how: 'Egg from Bramble Boars in Lanternwood', bonus: { tonicHeal: 0.15 }, describe: 'healing from tonics' },
   scuttle: { name: 'Sand Scuttle', eggFrom: 'scuttler', how: 'Egg from Dune Scuttlers in the Amber Dunes', bonus: { tonicDrops: 0.5 }, describe: 'chance of tonic drops' },
-  sprite: { name: 'Frost Sprite', eggFrom: 'golem', how: 'Egg from Frost Golems in Frostspine', bonus: { mend: 0.15 }, describe: 'healing from Mend' },
+  sprite: { name: 'Frost Sprite', eggFrom: 'golem', how: 'Egg from Frost Golems in Frostspine', bonus: { healing: 0.15 }, describe: 'healing from your skills' },
   moth: { name: 'Gloom Moth', eggFrom: null, how: 'Rarely found after winning a Lantern Night', bonus: { xp: 0.1 }, describe: 'XP from monsters' },
   mote: { name: 'Rift Mote', eggFrom: null, how: 'Your first Rift Lord defeat', bonus: { xp: 0.05, gold: 0.05 }, describe: 'XP and gold from monsters' },
 };

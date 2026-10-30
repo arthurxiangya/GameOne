@@ -2,10 +2,13 @@ import {
   ACTION_SERVICE,
   MONSTERS,
   NPC_INTERACT_RANGE,
+  CLASSES,
+  CLASS_CHANGE_RADIUS,
+  OUT_OF_COMBAT_SECONDS,
   PHYSICS,
   REGEN,
   SIM_DT,
-  SKILL_IDS,
+  SPEC_LEVEL,
   TITLES,
   bountiesForDay,
   dayNumber,
@@ -31,7 +34,10 @@ import {
   type RandomSource,
   type ShopItemId,
   type SiegeState,
+  type ClassId,
+  type SkillDef,
   type SkillId,
+  type SpecId,
   type TitleId,
   type Vec3,
   type VoxelWorld,
@@ -62,6 +68,7 @@ export type PlayerCommand =
   | { readonly kind: 'skill'; readonly skill: SkillId; readonly target: number | null }
   | { readonly kind: 'npc'; readonly npc: NpcId; readonly action: NpcAction; readonly arg: string | null }
   | { readonly kind: 'title'; readonly title: TitleId | null }
+  | { readonly kind: 'class'; readonly cls: ClassId; readonly spec: SpecId | null }
   | { readonly kind: 'mount'; readonly on: boolean }
   | { readonly kind: 'chooseMount'; readonly mount: MountId | null }
   | { readonly kind: 'choosePet'; readonly pet: PetId | null }
@@ -315,6 +322,9 @@ export class GameWorld implements CombatWorld, AiWorld {
       case 'title':
         result = this.chooseTitle(player, command.title);
         break;
+      case 'class':
+        result = this.changeClass(player, command.cls, command.spec);
+        break;
       case 'mount':
         result = command.on ? this.callMount(player) : this.mounts.dismiss(player);
         break;
@@ -355,6 +365,7 @@ export class GameWorld implements CombatWorld, AiWorld {
     if (this.tickCount % SLOW_CHECK_TICKS === 0) this.slowChecks();
 
     this.combat.update(dt);
+    this.combat.updateStatuses(dt, this.playersById.values(), this.monstersById.values());
     for (const m of this.monstersById.values()) {
       const asleep = m.alive && m.mode === 'idle' && !m.goal && this.playerGrid.query(m.x, m.z, SIMULATION_RADIUS).length === 0;
       if (!asleep) this.ai.update(m, dt);
@@ -375,7 +386,7 @@ export class GameWorld implements CombatWorld, AiWorld {
     return null;
   }
 
-  skillBlocked(player: Player, skill: SkillId): string | null {
+  skillBlocked(player: Player, skill: SkillDef): string | null {
     for (const mode of this.modes) {
       const reason = mode.skillBlocked?.(player, skill);
       if (reason) return reason;
@@ -422,6 +433,36 @@ export class GameWorld implements CombatWorld, AiWorld {
     return m;
   }
 
+  /**
+   * Class changes happen in Emberhold, out of combat; spec changes anywhere out of combat. Both
+   * are free, and outside a mode activity, so a choice never traps anyone.
+   */
+  private changeClass(player: Player, cls: ClassId, spec: SpecId | null): Result {
+    if (player.dead) return fail('You are defeated.');
+    const now = this.simTime;
+    if (now - player.lastHurtAt < OUT_OF_COMBAT_SECONDS || now - player.lastAttackAt < OUT_OF_COMBAT_SECONDS) return fail('Not while fighting.');
+    if (this.modes.some((mode) => mode.status(player) !== null)) return fail('Finish what you are doing first.');
+    if (spec !== null && player.level < SPEC_LEVEL) return fail(`Specializations open at level ${SPEC_LEVEL}.`);
+    const changingClass = cls !== player.cls;
+    if (changingClass && Math.hypot(player.body.x - this.spawnPoint.x, player.body.z - this.spawnPoint.z) > CLASS_CHANGE_RADIUS) {
+      return fail('Change class in Emberhold, near the fountain.');
+    }
+    if (!changingClass && (player.progress.specs[cls] ?? null) === spec) return ok();
+    player.switchClass(() => {
+      player.progress.cls = cls;
+      if (spec) player.progress.specs[cls] = spec;
+      else delete player.progress.specs[cls];
+    });
+    player.touchProgress();
+    const chosen = player.spec;
+    this.events.player(player.id, {
+      e: 'log',
+      text: changingClass ? `You are now a ${CLASSES[cls].name}${chosen ? ` (${chosen.name})` : ''}.` : `Specialization: ${chosen?.name ?? 'none'}.`,
+      c: 'good',
+    });
+    return ok();
+  }
+
   private callMount(player: Player): Result {
     for (const mode of this.modes) {
       const reason = mode.mountBlocked?.(player);
@@ -442,7 +483,10 @@ export class GameWorld implements CombatWorld, AiWorld {
   // ------------------------------------------------------------------ internals
 
   private stepPlayer(player: Player, dt: number): void {
-    for (const id of SKILL_IDS) if (player.cooldowns[id] > 0) player.cooldowns[id] = Math.max(0, player.cooldowns[id] - dt);
+    for (const [id, left] of player.cooldowns) {
+      if (left <= dt) player.cooldowns.delete(id);
+      else player.cooldowns.set(id, left - dt);
+    }
 
     player.inputCredit = Math.min(MAX_INPUT_CREDIT, player.inputCredit + dt / SIM_DT);
     while (player.inputCredit >= 1) {
@@ -485,8 +529,11 @@ export class GameWorld implements CombatWorld, AiWorld {
     if (player.dead) return;
     const recentlyHurt = this.simTime - player.lastHurtAt < REGEN.healthDelaySeconds;
     const fighting = recentlyHurt || this.simTime - player.lastAttackAt < 3;
-    const manaRate = (fighting ? REGEN.manaPerSecondInCombat : REGEN.manaPerSecondOutOfCombat) * (1 + activePetBonus(player.progress, 'mana'));
-    player.mp = Math.min(player.maxMp, player.mp + manaRate * dt);
+    const resource = player.classDef.resource;
+    const rate = fighting ? resource.regenInCombat : resource.regenOutOfCombat;
+    // The Reed Frogling quickens any resource that refills; draining pools (Resolve, Heat) still drain.
+    const boosted = rate > 0 ? rate * (1 + activePetBonus(player.progress, 'mana')) : rate;
+    player.mp = Math.max(0, Math.min(player.maxMp, player.mp + boosted * dt));
     if (!recentlyHurt && player.hp < player.maxHp) {
       player.hp = Math.min(player.maxHp, player.hp + player.maxHp * REGEN.healthFractionPerSecond * dt);
     }

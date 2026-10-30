@@ -98,8 +98,8 @@ describe('game server end to end', () => {
     const a = await connect(port);
     const b = await connect(port);
     try {
-      a.send({ t: 'hello', v: PROTOCOL_VERSION, token: token(1001), name: 'Aria' });
-      b.send({ t: 'hello', v: PROTOCOL_VERSION, token: token(1002), name: 'Bram' });
+      a.send({ t: 'hello', v: PROTOCOL_VERSION, token: token(1001), name: 'Aria', cls: 'emberblade' });
+      b.send({ t: 'hello', v: PROTOCOL_VERSION, token: token(1002), name: 'Bram', cls: 'ranger' });
       const welcomeA = await a.waitFor((m): m is Extract<ServerMessage, { t: 'welcome' }> => m.t === 'welcome');
       await b.waitFor((m): m is Extract<ServerMessage, { t: 'welcome' }> => m.t === 'welcome');
 
@@ -131,8 +131,8 @@ describe('game server end to end', () => {
     const a = await connect(port);
     const b = await connect(port);
     try {
-      a.send({ t: 'hello', v: PROTOCOL_VERSION, token: token(1003), name: 'Cora' });
-      b.send({ t: 'hello', v: PROTOCOL_VERSION, token: token(1004), name: 'Dain' });
+      a.send({ t: 'hello', v: PROTOCOL_VERSION, token: token(1003), name: 'Cora', cls: 'warden' });
+      b.send({ t: 'hello', v: PROTOCOL_VERSION, token: token(1004), name: 'Dain', cls: 'chimer' });
       const welcomeA = await a.waitFor((m): m is Extract<ServerMessage, { t: 'welcome' }> => m.t === 'welcome');
       const welcomeB = await b.waitFor((m): m is Extract<ServerMessage, { t: 'welcome' }> => m.t === 'welcome');
 

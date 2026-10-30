@@ -10,7 +10,8 @@ export class Effects {
   private readonly disc = new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2);
   private readonly pillar = new THREE.CylinderGeometry(1, 1, 1, 28, 1, true);
   private readonly gem = new THREE.OctahedronGeometry(0.24, 0);
-  private readonly boltMaterial = new THREE.MeshBasicMaterial({ color: 0xffc066 });
+  /** One material per projectile colour (each skill has its own). */
+  private readonly boltMaterials = new Map<number, THREE.MeshBasicMaterial>();
 
   constructor(private readonly scene: THREE.Scene) {}
 
@@ -55,10 +56,12 @@ export class Effects {
   }
 
   /** A bolt flying from one moving point to another over `seconds`. */
-  bolt(from: () => Vec3 | null, to: () => Vec3 | null, seconds: number): void {
+  bolt(from: () => Vec3 | null, to: () => Vec3 | null, seconds: number, color = 0xffc066): void {
     const start = from();
     if (!start) return;
-    const mesh = new THREE.Mesh(this.gem, this.boltMaterial);
+    let material = this.boltMaterials.get(color);
+    if (!material) this.boltMaterials.set(color, (material = new THREE.MeshBasicMaterial({ color })));
+    const mesh = new THREE.Mesh(this.gem, material);
     mesh.position.set(start.x, start.y, start.z);
     this.scene.add(mesh);
     let t = 0;
@@ -69,7 +72,7 @@ export class Effects {
       const origin = from() ?? start;
       if (!target || t >= duration) {
         this.scene.remove(mesh);
-        if (target) this.ringPulse(target, 0xff9a3c, 0.2, 1.2, 0.3);
+        if (target) this.ringPulse(target, color, 0.2, 1.2, 0.3);
         return false;
       }
       const p = t / duration;

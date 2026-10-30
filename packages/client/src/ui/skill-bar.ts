@@ -1,8 +1,9 @@
-import { isSkillId, type SkillId } from '@lanternwood/shared';
-
 export interface SkillBarHandlers {
-  skill(id: SkillId): void;
-  strikeHeld(held: boolean): void;
+  /** One of the four class skill slots, 0–3. */
+  slot(index: number): void;
+  tonic(): void;
+  /** Slot 1 (the basic attack) repeats while held. */
+  basicHeld(held: boolean): void;
   jump(held: boolean): void;
 }
 
@@ -10,6 +11,7 @@ export interface SkillBarHandlers {
 export function bindSkillBar(root: HTMLElement, handlers: SkillBarHandlers): void {
   for (const button of root.querySelectorAll<HTMLButtonElement>('.sk')) {
     const action = button.dataset.skill;
+    const slot = button.dataset.slot === undefined ? null : Number(button.dataset.slot);
     button.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       button.classList.add('down');
@@ -19,14 +21,15 @@ export function bindSkillBar(root: HTMLElement, handlers: SkillBarHandlers): voi
         // Not critical: the button still works without capture.
       }
       if (action === 'jump') handlers.jump(true);
-      else if (isSkillId(action)) {
-        if (action === 'strike') handlers.strikeHeld(true);
-        handlers.skill(action);
+      else if (action === 'tonic') handlers.tonic();
+      else if (slot !== null) {
+        if (slot === 0) handlers.basicHeld(true);
+        handlers.slot(slot);
       }
     });
     const release = (): void => {
       button.classList.remove('down');
-      if (action === 'strike') handlers.strikeHeld(false);
+      if (slot === 0) handlers.basicHeld(false);
       if (action === 'jump') handlers.jump(false);
     };
     button.addEventListener('pointerup', release);

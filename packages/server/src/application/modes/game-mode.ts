@@ -1,4 +1,4 @@
-import type { ModeState, MonsterType, PetId, RandomSource, SkillId, Vec3 } from '@lanternwood/shared';
+import type { ModeState, MonsterType, PetId, RandomSource, SkillDef, Vec3 } from '@lanternwood/shared';
 import type { AchievementSink } from '../../domain/achievements';
 import type { Monster, MonsterOptions } from '../../domain/entities/monster';
 import type { Player } from '../../domain/entities/player';
@@ -24,7 +24,7 @@ export interface GameMode {
   /** The hero fell off the world and is about to be rescued to town. */
   onPlayerFell?(player: Player): void;
   /** A reason the hero may not use this skill right now, or null. */
-  skillBlocked?(player: Player, skill: SkillId): string | null;
+  skillBlocked?(player: Player, skill: SkillDef): string | null;
   /** A reason the hero may not call a mount right now, or null. */
   mountBlocked?(player: Player): string | null;
   /** True if monsters should leave this hero alone. */

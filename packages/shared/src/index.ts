@@ -18,6 +18,7 @@ export * from './physics/player-physics';
 // Game rules
 export * from './game/stats';
 export * from './game/skills';
+export * from './game/classes';
 export * from './game/monsters';
 export * from './game/story';
 export * from './game/bounties';

@@ -19,7 +19,7 @@ const intentAt = (i: number): MoveIntent => ({ fwd: 1, strafe: Math.sin(i * 0.2)
 
 const selfFrom = (body: ReturnType<typeof createBody>): SelfState => ({
   x: body.x, y: body.y, z: body.z, vx: body.vx, vy: body.vy, vz: body.vz, g: body.grounded,
-  hp: 90, mhp: 90, mp: 40, mmp: 40, dead: false, cd: { strike: 0, bolt: 0, mend: 0, ring: 0, tonic: 0 }, mt: null, call: 0,
+  hp: 90, mhp: 90, mp: 40, mmp: 40, dead: false, cd: {}, st: [], sh: 0, mt: null, call: 0,
 });
 
 describe('LocalPlayer prediction', () => {

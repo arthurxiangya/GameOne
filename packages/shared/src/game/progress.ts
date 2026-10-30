@@ -1,4 +1,5 @@
 import { emptyBountyProgress, type BountyProgress } from './bounties';
+import { DEFAULT_CLASS, type ClassId, type SpecId } from './classes';
 import { STARTING_TONICS } from './economy';
 import type { MountId } from './mounts';
 import type { EggState, PetId, PetState } from './pets';
@@ -8,6 +9,10 @@ import type { TitleId } from './titles';
 /** Everything about a hero that persists between sessions. */
 export interface PlayerProgress {
   name: string;
+  /** The class the hero plays now. */
+  cls: ClassId;
+  /** The specialization chosen for each class, used from level 10. */
+  specs: Partial<Record<ClassId, SpecId>>;
   level: number;
   xp: number;
   gold: number;
@@ -54,8 +59,10 @@ export const newRecords = (): HeroRecords => ({
   raceBest: null, raceDay: -1, nightsWon: 0, riftBest: 0, riftLordDay: -1, duelWins: 0, duelLosses: 0, duelDraws: 0, rating: 1000,
 });
 
-export const newProgress = (name: string): PlayerProgress => ({
+export const newProgress = (name: string, cls: ClassId = DEFAULT_CLASS): PlayerProgress => ({
   name,
+  cls,
+  specs: {},
   level: 1,
   xp: 0,
   gold: 0,
@@ -80,6 +87,7 @@ export const cloneProgress = (p: PlayerProgress): PlayerProgress => ({
   ...p,
   story: Object.fromEntries(Object.entries(p.story).map(([k, v]) => [k, { ...v }])) as StoryProgress,
   bounties: { day: p.bounties.day, ids: [...p.bounties.ids], counts: [...p.bounties.counts], done: [...p.bounties.done], seen: [...p.bounties.seen] },
+  specs: { ...p.specs },
   titles: [...p.titles],
   mounts: [...p.mounts],
   pets: p.pets.map((x) => ({ ...x })),

@@ -6,16 +6,18 @@ const token = 'a'.repeat(32);
 const frame = { seq: 1, fwd: 1, strafe: 0, yaw: 0.5, jump: false, swim: false };
 
 describe('parseClientMessage', () => {
-  it('accepts a hello and cleans the name', () => {
-    const r = parseClientMessage({ t: 'hello', v: PROTOCOL_VERSION, token, name: '  Sir   Lance\u0007 ' });
+  it('accepts a hello with a class and cleans the name', () => {
+    const r = parseClientMessage({ t: 'hello', v: PROTOCOL_VERSION, token, name: '  Sir   Lance\u0007 ', cls: 'warden' });
     assert.ok(r.ok);
-    assert.deepEqual(r.msg, { t: 'hello', v: PROTOCOL_VERSION, token, name: 'Sir Lance' });
+    assert.deepEqual(r.msg, { t: 'hello', v: PROTOCOL_VERSION, token, name: 'Sir Lance', cls: 'warden' });
   });
 
   it('rejects malformed or hostile hellos', () => {
     assert.equal(parseClientMessage({ t: 'hello', v: 1, token: 'short', name: 'Ok' }).ok, false);
     assert.equal(parseClientMessage({ t: 'hello', v: 1, token, name: '!' }).ok, false);
-    assert.equal(parseClientMessage({ t: 'hello', v: '1', token, name: 'Okay' }).ok, false);
+    assert.equal(parseClientMessage({ t: 'hello', v: '1', token, name: 'Okay', cls: 'warden' }).ok, false);
+    assert.equal(parseClientMessage({ t: 'hello', v: 1, token, name: 'Okay' }).ok, false, 'a class is required');
+    assert.equal(parseClientMessage({ t: 'hello', v: 1, token, name: 'Okay', cls: 'paladin' }).ok, false);
   });
 
   it('validates every input frame', () => {
@@ -29,12 +31,21 @@ describe('parseClientMessage', () => {
   });
 
   it('checks skills, targets and NPC actions against the game data', () => {
-    assert.ok(parseClientMessage({ t: 'skill', skill: 'bolt', target: 12 }).ok);
-    assert.ok(parseClientMessage({ t: 'skill', skill: 'strike', target: null }).ok);
-    assert.equal(parseClientMessage({ t: 'skill', skill: 'nuke', target: null }).ok, false);
-    assert.equal(parseClientMessage({ t: 'skill', skill: 'bolt', target: 1.5 }).ok, false);
+    assert.ok(parseClientMessage({ t: 'skill', skill: 'aimedShot', target: 12 }).ok);
+    assert.ok(parseClientMessage({ t: 'skill', skill: 'slash', target: null }).ok);
+    assert.ok(parseClientMessage({ t: 'skill', skill: 'tonic', target: null }).ok);
+    assert.equal(parseClientMessage({ t: 'skill', skill: 'strike', target: null }).ok, false, 'the old shared kit is gone');
+    assert.equal(parseClientMessage({ t: 'skill', skill: 'aimedShot', target: 1.5 }).ok, false);
     assert.ok(parseClientMessage({ t: 'npc', npc: 'oda', action: 'buyTonic' }).ok);
     assert.equal(parseClientMessage({ t: 'npc', npc: 'nobody', action: 'buyTonic' }).ok, false);
+  });
+
+  it('accepts a class change only with a spec of that class', () => {
+    assert.deepEqual(parseClientMessage({ t: 'class', cls: 'ranger', spec: 'trapper' }), { ok: true, msg: { t: 'class', cls: 'ranger', spec: 'trapper' } });
+    assert.ok(parseClientMessage({ t: 'class', cls: 'ranger', spec: null }).ok);
+    assert.equal(parseClientMessage({ t: 'class', cls: 'ranger', spec: 'bulwark' }).ok, false);
+    assert.equal(parseClientMessage({ t: 'class', cls: 'rogue', spec: null }).ok, false);
+    assert.equal(parseClientMessage({ t: 'class', cls: 'ranger' }).ok, false);
   });
 
   it('requires a known story for story actions and a known item for trades', () => {
